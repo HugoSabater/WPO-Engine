@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  redis-queue:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api-orchestrator:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_HOST=redis-queue
+      - PORT=3000
+    volumes:
+      - wpo_db_data:/app/db
+    depends_on:
+      - redis-queue
+
+  lighthouse-worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    environment:
+      - REDIS_HOST=redis-queue
+    volumes:
+      - wpo_db_data:/app/db
+    depends_on:
+      - redis-queue
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-orchestrator
+
+volumes:
+  redis_data:
+  wpo_db_data:

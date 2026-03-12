@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-charcoal-950 text-charcoal-200 antialiased;
+  }
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-charcoal-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-charcoal-600 rounded-full;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-charcoal-900 border border-charcoal-700/50 rounded-xl p-5;
+  }
+  .badge-red {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20;
+  }
+  .badge-amber {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20;
+  }
+  .badge-green {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;
+  }
+  .tab-active {
+    @apply border-b-2 border-blue-500 text-blue-400 font-medium;
+  }
+  .tab-inactive {
+    @apply border-b-2 border-transparent text-charcoal-400 hover:text-charcoal-200 transition-colors;
+  }
+  .code-block {
+    @apply font-mono text-xs bg-charcoal-950 border border-charcoal-700/50 rounded-lg p-3 text-emerald-400;
+  }
+}
