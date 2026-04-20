@@ -49,4 +49,28 @@ export class QueueService {
         }
         console.log(`[QueueService] Tareas cron diarias programadas (03:00) para ${urls.length} URLs.`);
     }
+
+    /**
+     * Devuelve un snapshot de los contadores vitales de BullMQ.
+     * El frontend hace polling cada 3 s para renderizar el HUD de estado.
+     */
+    public static async getStatus(): Promise<{ waiting: number; active: number; delayed: number; failed: number }> {
+        const counts = await lighthouseQueue.getJobCounts('waiting', 'active', 'delayed', 'failed');
+        return {
+            waiting: counts.waiting  ?? 0,
+            active:  counts.active   ?? 0,
+            delayed: counts.delayed  ?? 0,
+            failed:  counts.failed   ?? 0,
+        };
+    }
+
+    /**
+     * Purga todos los jobs en estado 'failed' de la cola BullMQ.
+     * Útil para limpiar el historial de errores pre-hotfix (puerto 9222).
+     */
+    public static async cleanFailed(): Promise<number> {
+        const cleaned = await lighthouseQueue.clean(0, 1000, 'failed');
+        console.log(`[QueueService] Purgados ${cleaned.length} jobs fallidos de la cola.`);
+        return cleaned.length;
+    }
 }

@@ -18,7 +18,7 @@ export interface MetricRow {
   // Score calculado en cliente (0-100)
   score?: number;
   strategy?: 'mobile' | 'desktop';
-  screenshot_base64?: string | null;
+  // screenshot_base64: ELIMINADO — Roadmap V2, Fase 1 (Purga de Datos)
 }
 
 export interface ChartDataPoint {
@@ -38,4 +38,5 @@ export interface PriorityInsight {
   description: string;
 }
 
-export type SlideOverTab = 'business' | 'technical' | 'preview';
+// 'preview' eliminado — tab de Vista Previa retirada definitivamente
+export type SlideOverTab = 'business' | 'technical' | 'rawdata';

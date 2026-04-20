@@ -41,4 +41,19 @@
   .code-block {
     @apply font-mono text-xs bg-charcoal-950 border border-charcoal-700/50 rounded-lg p-3 text-emerald-400;
   }
+  /* Animación de entrada para filas del acordeón */
+  .cluster-row-enter {
+    animation: rowFadeIn 0.18s ease-out both;
+  }
+}
+
+@keyframes rowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

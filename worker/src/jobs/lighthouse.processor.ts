@@ -23,7 +23,7 @@ export const wpoWorker = new Worker('LighthouseAudit', async (job: Job) => {
             '--disable-gpu',
             '--disable-dev-shm-usage',
             '--disable-software-rasterizer',
-            '--remote-debugging-port=9222',
+            '--remote-debugging-port=0',
             '--remote-debugging-address=0.0.0.0',
             '--disable-web-security',
             '--disable-features=IsolateOrigins,site-per-process'
@@ -66,7 +66,7 @@ export const wpoWorker = new Worker('LighthouseAudit', async (job: Job) => {
             tbt: audits['total-blocking-time']?.numericValue || 0,
             domSize: audits['dom-size']?.numericValue || 0,
             strategy: strategy,
-            screenshot_base64: (audits['full-page-screenshot']?.details as any)?.screenshot?.data || null
+            screenshot_base64: null // Roadmap V2 Fase 1: Purga Visual (Blobs eliminados)
         };
 
         await Database.insertMetric(metrics);

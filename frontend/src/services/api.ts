@@ -4,6 +4,23 @@ import type { MetricRow, PriorityInsight, ChartDataPoint } from '../types';
 // vite.config.ts redirige /api → http://localhost:3000
 const API_URL = '';
 
+export interface QueueStatus {
+  waiting: number;
+  active:  number;
+  delayed: number;
+  failed:  number;
+}
+
+/**
+ * Snapshot de contadores vitales de BullMQ.
+ * Usado por el polling de 3s en App.tsx para el HUD parpadeante.
+ */
+export async function getQueueStatus(): Promise<QueueStatus> {
+  const res = await fetch(`${API_URL}/api/queue/status`);
+  if (!res.ok) throw new Error(`Queue status error: ${res.status}`);
+  return res.json() as Promise<QueueStatus>;
+}
+
 /**
  * Encola un análisis WPO On-Demand en el Backend.
  */

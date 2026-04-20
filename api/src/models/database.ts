@@ -30,6 +30,27 @@ const db = new sqlite3.Database(dbPath);
         db.run("ALTER TABLE metrics ADD COLUMN is_baseline INTEGER DEFAULT 0", () => {});
         db.run("ALTER TABLE metrics ADD COLUMN strategy TEXT DEFAULT 'mobile'", () => {});
         db.run("ALTER TABLE metrics ADD COLUMN screenshot_base64 TEXT", () => {});
+
+        // ── Nuevas tablas para Automations (Fase 3) ──────────────────────────
+        db.run(`
+            CREATE TABLE IF NOT EXISTS cronjobs (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                url             TEXT    NOT NULL,
+                strategy        TEXT    NOT NULL DEFAULT 'mobile',
+                cron_expression TEXT    NOT NULL,
+                active          INTEGER NOT NULL DEFAULT 1,
+                created_at      DATETIME DEFAULT (datetime('now'))
+            )
+        `);
+        db.run(`
+            CREATE TABLE IF NOT EXISTS alerts (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                email       TEXT NOT NULL,
+                device      TEXT NOT NULL DEFAULT 'both',
+                thresholds  TEXT NOT NULL,  -- JSON: {"lcp": 2.5, "score": 80}
+                created_at  DATETIME DEFAULT (datetime('now'))
+            )
+        `);
     });
 
     export class Database {

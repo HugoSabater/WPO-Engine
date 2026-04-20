@@ -116,4 +116,32 @@ export class WPOController {
             }
         }
     }
+
+    /**
+     * GET /api/queue/status
+     * Retorna snapshot de contadores BullMQ para el polling del Frontend HUD.
+     */
+    public static async getQueueStatus(req: Request, res: Response): Promise<void> {
+        try {
+            const status = await QueueService.getStatus();
+            res.status(200).json(status);
+        } catch (error) {
+            console.error('[WPOController] Error fetching queue status:', error);
+            res.status(500).json({ error: 'Error obteniendo estado de la cola.' });
+        }
+    }
+
+    /**
+     * POST /api/queue/clean-failed
+     * Purga manualmente todos los jobs en estado "failed" de BullMQ.
+     */
+    public static async cleanFailedJobs(req: Request, res: Response): Promise<void> {
+        try {
+            const count = await QueueService.cleanFailed();
+            res.status(200).json({ message: `${count} jobs fallidos purgados.`, cleaned: count });
+        } catch (error) {
+            console.error('[WPOController] Error limpiando failed jobs:', error);
+            res.status(500).json({ error: 'Error purgando jobs fallidos.' });
+        }
+    }
 }
