@@ -15,7 +15,7 @@ Las herramientas tradicionales de navegador proporcionan un rendimiento estátic
 ## 2. Características Principales (Features)
 
 - 📱 **Soporte Multi-Dispositivo (Desktop / Mobile):** Selector integrado para ejecutar análisis bajo parámetros exactos de emulación de CPU, viewport y densidad de píxeles móviles o de escritorio.
-- 📸 **Vista Previa Visual (Device Mockups):** El motor Chromium captura el renderizado final (Base64) en el momento del escaneo y la interfaz lo proyecta adaptando el marco físico (Vertical/Horizontal) de forma fluida.
+- 📸 **Vista Previa Visual (Device Mockups):** El motor Chromium captura el renderizado final (JPG en Storage Local) en el momento del escaneo, mitigando drásticamente sobrecargas de hardware y la interfaz lo proyecta nativamente adaptando el marco físico de forma fluida.
 - 🗂️ **Smart Clustering (Agrupación Inteligente):** Agrupa automáticamente las métricas de URLs por sus subdirectorios (`/blog/`, `/categoria/`, etc.) para identificar cuellos de botella específicos de la arquitectura de la web.
 - ♻️ **Controles In-Place:** Botones integrados para re-escanear URLs conservando su estrategia original o destruir registros (Clean-up), todo con un sistema interactivo de loading en vivo.
 - 📈 **Gráficas de Tendencia:** Evolución de los últimos 7 días con un algoritmo unificado (`Performance Score`) para visualización C-Level.
@@ -30,6 +30,16 @@ El ecosistema opera mediante una orquestación basada en microservicios, optimiz
 | `api-orchestrator`  | API REST & Cola de Tareas (Producer) | Node.js, Express (CORS/GZIP), BullMQ, SQLite  |
 | `lighthouse-worker` | Consumidor asíncrono y Render        | Ubuntu, Puppeteer Headless, Google Lighthouse |
 | `redis-queue`       | Message Broker en Memoria RAM        | Redis 7 Alpine                                |
+
+## 📚 Documentación Oficial y Arquitectura
+
+Dado el salto a la arquitectura Single Page Application (SPA), recomendamos encarecidamente consultar nuestros registros de control y manuales técnicos nativos antes de operar o modificar la infraestructura:
+
+- **[Histórico de Versiones y Decisiones (ADR)](./docs/WPO_Version_Control_ADR.md)**: Documento retrospectivo para entender el "antes vs ahora" (Migración de Monolito a SPA, Destrucción de payload Base64).
+- **[Manual Arquitectónico y Operativo](./docs/WPO_Architecture_And_Operation_Manual.md)**: El manual de uso interactivo para entender el enrutamiento TopBar, el HUD Polling continuo y buenas prácticas de ejecución.
+- **[Backend Architecture](./docs/WPO_Backend_Architecture.md)** y **[Roadmap por Sprints](./docs/WPO_Roadmap.md)**: Planificaciones maestras y mitigaciones de fallas críticas.
+
+---
 
 ## 4. Diseño Técnico y Optimizaciones Avanzadas
 
@@ -48,7 +58,7 @@ Levantar instancias de Chromium es devastador para la memoria RAM. El worker est
 ### 4.3 Persistencia y Compresión GZIP
 
 - **SQLite en Modo WAL:** Habilita el `Write-Ahead Logging`, lo que previene por diseño el bloqueo colisional transaccional (`SQLITE_BUSY`). La DB permite al React Frontend leer cientos de historiales y gráficas concurrentemente mientras el Worker escribe auditorías completas.
-- **Payload Network Optimization:** La API integra Middleware Compression (GZIP/Deflate) y ajusta los límites de red de Express para devolver eficientemente las capturas Base64 generadas, recortando pesos de payload de ~18MB a ~1MB, asegurando un TTFB relámpago en el Dashboard.
+- **Storage Layer Optimization:** La API integra Middleware Compression (GZIP/Deflate) y sirve eficientemente las imágenes persistidas en el volumen mapeado SSD a través de rutas estáticas, erradicando inyecciones Base64 de 18MB directas. Esto asegura un TTFB relámpago en el Dashboard evitando OOMs.
 
 ### 4.4 Arquitectura Frontend React
 
