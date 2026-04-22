@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  getCronjobs,   createCronjob,  toggleCronjob as apiToggleCronjob, deleteCronjob as apiDeleteCronjob,
+  getAlerts,     createAlert,    deleteAlert   as apiDeleteAlert,
+  type CronJobRow, type AlertRow, type Strategy, type AlertDevice, type AlertMetric,
+} from '../services/api';
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-type Strategy  = 'mobile' | 'desktop';
-type AlertDevice = 'mobile' | 'desktop' | 'both';
-type AlertMetric = 'score' | 'lcp' | 'ttfb' | 'cls' | 'tbt';
-type CronMode  = 'basic' | 'advanced';
+// ─── Tipos locales UI (no expuestos hacia afuera) ─────────────────────────────
+type CronMode = 'basic' | 'advanced';
 
 interface CronBasic {
   mode: 'basic';
   freq: 'daily' | 'weekly';
-  day:  string; // '0'-'6' (Dom-Sáb)
-  hour: string; // '0'-'23'
+  day:  string;
+  hour: string;
 }
 interface CronAdvanced {
   mode: 'advanced';
@@ -18,37 +20,8 @@ interface CronAdvanced {
 }
 type CronConfig = CronBasic | CronAdvanced;
 
-interface CronJob {
-  id:       number;
-  url:      string;
-  strategy: Strategy;
-  cron:     string;   // expresión final, ej. "0 3 * * 1"
-  active:   boolean;
-  lastRun:  string;
-}
-
+// MetricThresholds en UI se maneja como strings (inputs), se convierten a number al enviar
 type MetricThresholds = Partial<Record<AlertMetric, string>>;
-
-interface AlertRule {
-  id:         number;
-  email:      string;
-  thresholds: MetricThresholds; // métrica → umbral
-  device:     AlertDevice;
-}
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_JOBS: CronJob[] = [
-  { id: 1, url: 'https://floressolidarias.org',        strategy: 'mobile',  cron: '0 3 * * *',   active: true,  lastRun: 'Hoy 03:00' },
-  { id: 2, url: 'https://floressolidarias.org',        strategy: 'desktop', cron: '0 3 * * *',   active: true,  lastRun: 'Hoy 03:05' },
-  { id: 3, url: 'https://floressolidarias.org/ramos',  strategy: 'mobile',  cron: '0 */12 * * *',active: true,  lastRun: 'Hoy 15:00' },
-  { id: 4, url: 'https://floressolidarias.org/tienda', strategy: 'mobile',  cron: '0 3 * * 1',   active: false, lastRun: 'Lun 03:00' },
-];
-
-const MOCK_ALERTS: AlertRule[] = [
-  { id: 1, email: 'hugo@floressolidarias.org',      thresholds: { score: '50', lcp: '4' },   device: 'both'    },
-  { id: 2, email: 'marketing@floressolidarias.org', thresholds: { lcp: '2.5', cls: '0.25' }, device: 'mobile'  },
-  { id: 3, email: 'dev@floressolidarias.org',       thresholds: { tbt: '600', ttfb: '1800'},device: 'desktop' },
-];
 
 // ─── Constantes de UI ─────────────────────────────────────────────────────────
 const METRIC_DEFS: { key: AlertMetric; label: string; unit: string; placeholder: string }[] = [
@@ -59,12 +32,11 @@ const METRIC_DEFS: { key: AlertMetric; label: string; unit: string; placeholder:
   { key: 'tbt',   label: 'TBT',    unit: 'ms',  placeholder: '600'  },
 ];
 
-const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const DAYS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0') + ':00');
 
-// Convierte la config básica a expresión CRON
 function buildCronExpr(cfg: CronBasic): string {
-  if (cfg.freq === 'daily')  return `0 ${cfg.hour} * * *`;
+  if (cfg.freq === 'daily') return `0 ${cfg.hour} * * *`;
   return `0 ${cfg.hour} * * ${cfg.day}`;
 }
 
@@ -107,7 +79,6 @@ function CronBuilder({ value, onChange }: {
 
   return (
     <div className="space-y-2.5">
-      {/* Pestañas Básico / Avanzado */}
       <div className="flex rounded-lg border border-charcoal-700/50 overflow-hidden text-[11px] font-medium">
         {(['basic', 'advanced'] as CronMode[]).map(m => (
           <button
@@ -125,7 +96,6 @@ function CronBuilder({ value, onChange }: {
       </div>
 
       {isBasic ? (
-        /* ── Modo Básico: 3 selects en línea ── */
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className={LABEL_CLS}>Frecuencia</label>
@@ -138,7 +108,6 @@ function CronBuilder({ value, onChange }: {
               <option value="weekly">Semanal</option>
             </select>
           </div>
-
           <div>
             <label className={LABEL_CLS}>Día</label>
             <select
@@ -150,7 +119,6 @@ function CronBuilder({ value, onChange }: {
               {DAYS.map((d, i) => <option key={i} value={String(i)}>{d}</option>)}
             </select>
           </div>
-
           <div>
             <label className={LABEL_CLS}>Hora</label>
             <select
@@ -163,7 +131,6 @@ function CronBuilder({ value, onChange }: {
           </div>
         </div>
       ) : (
-        /* ── Modo Avanzado: input CRON libre ── */
         <div>
           <label className={LABEL_CLS}>Expresión CRON</label>
           <input
@@ -187,7 +154,6 @@ function CronBuilder({ value, onChange }: {
         </div>
       )}
 
-      {/* Preview de la expresión resultante */}
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-charcoal-900/60 border border-charcoal-700/30">
         <span className="text-[10px] text-charcoal-500">Expresión:</span>
         <code className="text-[11px] font-mono text-emerald-400">
@@ -198,7 +164,7 @@ function CronBuilder({ value, onChange }: {
   );
 }
 
-// ─── Componente: Selector multi-métrica (pills + thresholds dinámicos) ────────
+// ─── Componente: Selector multi-métrica ───────────────────────────────────────
 function MetricSelector({ thresholds, onChange }: {
   thresholds: MetricThresholds;
   onChange: (t: MetricThresholds) => void;
@@ -218,7 +184,6 @@ function MetricSelector({ thresholds, onChange }: {
 
   return (
     <div className="space-y-3">
-      {/* Pills de selección */}
       <div>
         <label className={LABEL_CLS}>Métricas a vigilar</label>
         <div className="flex flex-wrap gap-1.5">
@@ -246,7 +211,6 @@ function MetricSelector({ thresholds, onChange }: {
         )}
       </div>
 
-      {/* Inputs de umbral — uno por métrica seleccionada */}
       {selected.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {selected.map(({ key, label, unit, placeholder }) => (
@@ -272,7 +236,8 @@ function MetricSelector({ thresholds, onChange }: {
 
 // ─── Columna 1: CronjobsPanel ────────────────────────────────────────────────
 function CronjobsPanel() {
-  const [jobs, setJobs] = useState<CronJob[]>(MOCK_JOBS);
+  const [jobs,     setJobs]     = useState<CronJobRow[]>([]);
+  const [loading,  setLoading]  = useState(true);
   const [url,      setUrl]      = useState('');
   const [strategy, setStrategy] = useState<Strategy>('mobile');
   const [cronCfg,  setCronCfg]  = useState<CronConfig>({ mode: 'basic', freq: 'daily', day: '1', hour: '3' });
@@ -280,19 +245,47 @@ function CronjobsPanel() {
   const resolveCron = (cfg: CronConfig): string =>
     cfg.mode === 'basic' ? buildCronExpr(cfg) : cfg.expr;
 
-  const toggleJob  = (id: number) =>
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, active: !j.active } : j));
-  const deleteJob  = (id: number) =>
-    setJobs(prev => prev.filter(j => j.id !== id));
+  // Carga inicial desde el backend
+  useEffect(() => {
+    getCronjobs()
+      .then(data => setJobs(data))
+      .catch(err  => console.error('[CronjobsPanel] getCronjobs:', err))
+      .finally(()  => setLoading(false));
+  }, []);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleToggle = async (job: CronJobRow) => {
+    const nextActive = !job.active;
+    try {
+      await apiToggleCronjob(job.id, nextActive);
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, active: nextActive } : j));
+    } catch (err) {
+      console.error('[CronjobsPanel] toggleCronjob:', err);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await apiDeleteCronjob(id);
+      setJobs(prev => prev.filter(j => j.id !== id));
+    } catch (err) {
+      console.error('[CronjobsPanel] deleteCronjob:', err);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
-    setJobs(prev => [{
-      id: Date.now(), url: url.trim(), strategy,
-      cron: resolveCron(cronCfg), active: true, lastRun: '—',
-    }, ...prev]);
-    setUrl('');
+    try {
+      const created = await createCronjob({
+        url:             url.trim(),
+        strategy,
+        cron_expression: resolveCron(cronCfg),
+      });
+      setJobs(prev => [created, ...prev]);
+      setUrl('');
+    } catch (err) {
+      console.error('[CronjobsPanel] createCronjob:', err);
+    }
   };
 
   return (
@@ -355,7 +348,10 @@ function CronjobsPanel() {
 
       {/* Lista */}
       <div className="space-y-2">
-        {jobs.length === 0 && (
+        {loading && (
+          <p className="text-xs text-charcoal-600 text-center py-6 animate-pulse">Cargando tareas…</p>
+        )}
+        {!loading && jobs.length === 0 && (
           <p className="text-xs text-charcoal-600 text-center py-6">No hay tareas configuradas.</p>
         )}
         {jobs.map(job => (
@@ -368,23 +364,23 @@ function CronjobsPanel() {
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-[10px] text-charcoal-500 capitalize">{job.strategy}</span>
                   <span className="text-charcoal-700">·</span>
-                  <code className="text-[10px] font-mono text-emerald-400/80">{job.cron}</code>
+                  <code className="text-[10px] font-mono text-emerald-400/80">{job.cron_expression}</code>
                   <span className="text-charcoal-700">·</span>
-                  <span className="text-[10px] text-charcoal-600">Último: {job.lastRun}</span>
+                  <span className="text-[10px] text-charcoal-600">Último: {job.last_run ?? '—'}</span>
                 </div>
               </div>
               <StatusBadge active={job.active} />
             </div>
             <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-charcoal-700/30">
               <button
-                onClick={() => toggleJob(job.id)}
+                onClick={() => handleToggle(job)}
                 className={`text-[11px] font-medium px-2.5 py-1 rounded transition-colors
                   ${job.active ? 'text-amber-400 hover:bg-amber-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'}`}
               >
                 {job.active ? '⏸ Pausar' : '▶ Activar'}
               </button>
               <button
-                onClick={() => deleteJob(job.id)}
+                onClick={() => handleDelete(job.id)}
                 className="text-[11px] font-medium text-red-400 hover:bg-red-500/10 px-2.5 py-1 rounded transition-colors ml-auto"
               >
                 🗑 Eliminar
@@ -399,32 +395,51 @@ function CronjobsPanel() {
 
 // ─── Columna 2: AlertsPanel ───────────────────────────────────────────────────
 function AlertsPanel() {
-  const [alerts, setAlerts] = useState<AlertRule[]>(MOCK_ALERTS);
+  const [alerts,     setAlerts]     = useState<AlertRow[]>([]);
+  const [loading,    setLoading]    = useState(true);
   const [email,      setEmail]      = useState('');
   const [thresholds, setThresholds] = useState<MetricThresholds>({});
   const [device,     setDevice]     = useState<AlertDevice>('both');
 
   const deviceLabel: Record<AlertDevice, string> = { mobile: 'Mobile', desktop: 'Desktop', both: 'Ambos' };
 
-  const deleteAlert  = (id: number) =>
-    setAlerts(prev => prev.filter(a => a.id !== id));
+  // Carga inicial desde el backend
+  useEffect(() => {
+    getAlerts()
+      .then(data => setAlerts(data))
+      .catch(err  => console.error('[AlertsPanel] getAlerts:', err))
+      .finally(()  => setLoading(false));
+  }, []);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleDelete = async (id: number) => {
+    try {
+      await apiDeleteAlert(id);
+      setAlerts(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error('[AlertsPanel] deleteAlert:', err);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const hasThreshold = Object.keys(thresholds).length > 0 &&
       Object.values(thresholds).every(v => v !== '');
     if (!email.trim() || !hasThreshold) return;
-    setAlerts(prev => [{ id: Date.now(), email: email.trim(), thresholds, device }, ...prev]);
-    setEmail('');
-    setThresholds({});
-  };
 
-  // Formatea las métricas de una alerta para mostrar en la lista
-  const formatThresholds = (t: MetricThresholds): string =>
-    METRIC_DEFS
-      .filter(m => m.key in t && t[m.key] !== '')
-      .map(m => `${m.label} ${m.key === 'score' ? '<' : '>'} ${t[m.key]}${m.unit}`)
-      .join(' | ');
+    // Convertir strings del formulario a números (el backend requiere typeof v === 'number')
+    const numericThresholds = Object.fromEntries(
+      Object.entries(thresholds).map(([k, v]) => [k, parseFloat(v as string)])
+    ) as Record<AlertMetric, number>;
+
+    try {
+      const created = await createAlert({ email: email.trim(), device, thresholds: numericThresholds });
+      setAlerts(prev => [created, ...prev]);
+      setEmail('');
+      setThresholds({});
+    } catch (err) {
+      console.error('[AlertsPanel] createAlert:', err);
+    }
+  };
 
   return (
     <div className="card flex flex-col gap-5">
@@ -461,7 +476,6 @@ function AlertsPanel() {
           />
         </div>
 
-        {/* Selector multi-métrica */}
         <MetricSelector thresholds={thresholds} onChange={setThresholds} />
 
         <div>
@@ -487,7 +501,10 @@ function AlertsPanel() {
 
       {/* Lista de alertas */}
       <div className="space-y-2">
-        {alerts.length === 0 && (
+        {loading && (
+          <p className="text-xs text-charcoal-600 text-center py-6 animate-pulse">Cargando alertas…</p>
+        )}
+        {!loading && alerts.length === 0 && (
           <p className="text-xs text-charcoal-600 text-center py-6">No hay alertas configuradas.</p>
         )}
         {alerts.map(alert => (
@@ -497,22 +514,23 @@ function AlertsPanel() {
             <div className="min-w-0 space-y-1.5">
               <p className="text-xs font-mono text-charcoal-200 truncate">{alert.email}</p>
 
-              {/* Badges multi-métrica */}
               <div className="flex flex-wrap gap-1">
-                {METRIC_DEFS.filter(m => m.key in alert.thresholds && alert.thresholds[m.key] !== '').map(m => (
-                  <span key={m.key}
-                    className="inline-flex items-center px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20 text-[10px] text-yellow-300 font-medium font-mono"
-                  >
-                    {m.label}&nbsp;{m.key === 'score' ? '<' : '>'}&nbsp;{alert.thresholds[m.key]}{m.unit}
-                  </span>
-                ))}
+                {METRIC_DEFS
+                  .filter(m => m.key in alert.thresholds)
+                  .map(m => (
+                    <span key={m.key}
+                      className="inline-flex items-center px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20 text-[10px] text-yellow-300 font-medium font-mono"
+                    >
+                      {m.label}&nbsp;{m.key === 'score' ? '<' : '>'}&nbsp;{alert.thresholds[m.key]}{m.unit}
+                    </span>
+                  ))}
               </div>
 
               <p className="text-[10px] text-charcoal-500 capitalize">{deviceLabel[alert.device]}</p>
             </div>
 
             <button
-              onClick={() => deleteAlert(alert.id)}
+              onClick={() => handleDelete(alert.id)}
               className="flex-shrink-0 text-charcoal-600 hover:text-red-400 transition-colors p-1.5 rounded hover:bg-red-500/10"
               title="Eliminar alerta"
             >
@@ -536,16 +554,6 @@ export default function AutomationsView() {
         <h2 className="text-base font-semibold text-charcoal-100">Automations</h2>
         <p className="text-xs text-charcoal-500 mt-0.5">
           Gestiona cronjobs de análisis periódicos y alertas multimétrica por correo electrónico.
-        </p>
-      </div>
-
-      <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-lg bg-blue-500/5 border border-blue-500/15">
-        <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="text-xs text-blue-300 leading-relaxed">
-          <strong className="font-semibold">Modo mock activo.</strong>{' '}
-          Los datos son de demostración. La integración con BullMQ y el motor SMTP se implementará en la Fase 3.
         </p>
       </div>
 

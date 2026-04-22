@@ -150,6 +150,113 @@ export async function fetchHistory(): Promise<ChartDataPoint[]> {
   });
 }
 
+// ─── Automations API ──────────────────────────────────────────────────────────
+
+export type Strategy    = 'mobile' | 'desktop';
+export type AlertDevice = 'mobile' | 'desktop' | 'both';
+export type AlertMetric = 'score' | 'lcp' | 'ttfb' | 'cls' | 'tbt';
+
+export interface CronJobRow {
+  id:              number;
+  url:             string;
+  strategy:        Strategy;
+  cron_expression: string;
+  active:          boolean;     // 0 | 1 en SQLite, el servicio lo normaliza a boolean
+  last_run:        string | null;
+}
+
+export interface AlertRow {
+  id:         number;
+  email:      string;
+  device:     AlertDevice;
+  thresholds: Record<AlertMetric, number>;
+}
+
+/** GET /api/cronjobs */
+export async function getCronjobs(): Promise<CronJobRow[]> {
+  const res = await fetch(`${API_URL}/api/cronjobs`);
+  if (!res.ok) throw new Error(`[getCronjobs] ${res.status}`);
+  const json = await res.json();
+  return json.data as CronJobRow[];
+}
+
+/** POST /api/cronjobs — payload: { url, strategy, cron_expression } */
+export async function createCronjob(payload: {
+  url:             string;
+  strategy:        Strategy;
+  cron_expression: string;
+}): Promise<CronJobRow> {
+  const res = await fetch(`${API_URL}/api/cronjobs`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `[createCronjob] ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data as CronJobRow;
+}
+
+/** PATCH /api/cronjobs/:id/toggle — payload: { active: boolean } */
+export async function toggleCronjob(id: number, active: boolean): Promise<void> {
+  const res = await fetch(`${API_URL}/api/cronjobs/${id}/toggle`, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ active }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `[toggleCronjob] ${res.status}`);
+  }
+}
+
+/** DELETE /api/cronjobs/:id */
+export async function deleteCronjob(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/api/cronjobs/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `[deleteCronjob] ${res.status}`);
+  }
+}
+
+/** GET /api/alerts */
+export async function getAlerts(): Promise<AlertRow[]> {
+  const res = await fetch(`${API_URL}/api/alerts`);
+  if (!res.ok) throw new Error(`[getAlerts] ${res.status}`);
+  const json = await res.json();
+  return json.data as AlertRow[];
+}
+
+/** POST /api/alerts — thresholds deben ser números (el backend valida typeof v !== 'number') */
+export async function createAlert(payload: {
+  email:      string;
+  device:     AlertDevice;
+  thresholds: Record<AlertMetric, number>;
+}): Promise<AlertRow> {
+  const res = await fetch(`${API_URL}/api/alerts`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `[createAlert] ${res.status}`);
+  }
+  const json = await res.json();
+  return json.data as AlertRow;
+}
+
+/** DELETE /api/alerts/:id */
+export async function deleteAlert(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/api/alerts/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `[deleteAlert] ${res.status}`);
+  }
+}
+
 /**
  * Genera datos dummy de gráfica si la API falla o está vacía.
  */
