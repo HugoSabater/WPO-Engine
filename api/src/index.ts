@@ -16,6 +16,7 @@ app.post('/api/audit/batch', WPOController.enqueueBatchAudit);
 app.post('/api/audit/ondemand', WPOController.enqueueOnDemand);
 app.post('/api/audit/baseline', WPOController.setBaseline);
 app.get('/api/audit/metrics', WPOController.getMetrics);
+app.get('/api/audit/all',     WPOController.getAllMetrics);  // Reports: sin límite
 app.get('/api/audit/history', WPOController.getHistory);
 app.delete('/api/audit/:id', WPOController.deleteAudit);
 // Estado y gestión en tiempo real de la cola BullMQ

@@ -40,6 +40,20 @@ export class WPOController {
         }
     }
 
+    /**
+     * GET /api/audit/all
+     * Historial completo sin límite de registros — exclusivo para el módulo Reports.
+     */
+    public static async getAllMetrics(req: Request, res: Response): Promise<void> {
+        try {
+            const rows = await Database.getAllMetrics();
+            res.status(200).json({ data: rows, total: rows.length });
+        } catch (error) {
+            console.error('[WPOController] Error fetching all metrics:', error);
+            res.status(500).json({ error: 'Internal Server Error fetching full history.' });
+        }
+    }
+
     public static async getHistory(req: Request, res: Response): Promise<void> {
         try {
             const rows = await Database.getHistory7Days();

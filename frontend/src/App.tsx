@@ -9,14 +9,34 @@ import {
   fetchMetrics,
   fetchHistory,
   buildPriorityInsights,
+  getLatestPerSite,
   getQueueStatus,
 } from './services/api';
 import type { QueueStatus } from './services/api';
 import './index.css';
 
+// ─── Mapa de rutas URL ↔ vista ────────────────────────────────────────────────
+// Permite navegación directa (bookmark, compartir enlace) y botón Atrás.
+const ROUTE_MAP: Record<string, ActiveView> = {
+  '/':              'dashboard',
+  '/dashboard':     'dashboard',
+  '/site-explorer': 'explorer',
+  '/automations':   'automations',
+  '/reports':       'reports',
+};
+const VIEW_TO_PATH: Record<ActiveView, string> = {
+  dashboard:   '/dashboard',
+  explorer:    '/site-explorer',
+  automations: '/automations',
+  reports:     '/reports',
+};
+function viewFromPath(): ActiveView {
+  return ROUTE_MAP[window.location.pathname] ?? 'dashboard';
+}
+
 export default function App() {
-  // ── Navegación SPA ─────────────────────────────────────────────────────────
-  const [activeView, setActiveView] = useState<ActiveView>('dashboard');
+  // ── Navegación SPA — inicializada desde la URL actual ───────────────────────
+  const [activeView, setActiveView] = useState<ActiveView>(viewFromPath);
 
   // ── Datos globales del Dashboard ───────────────────────────────────────────
   const [metrics,   setMetrics]   = useState<MetricRow[]>([]);
@@ -36,7 +56,9 @@ export default function App() {
     try {
       const [data, history] = await Promise.all([fetchMetrics(), fetchHistory()]);
       setMetrics(data);
-      setInsights(buildPriorityInsights(data));
+      // Insights y tarjetas basados SOLO en el último análisis de cada sitio
+      const latestPerSite = getLatestPerSite(data);
+      setInsights(buildPriorityInsights(latestPerSite));
       setChartData(history);
       setError(null);
     } catch {
@@ -81,6 +103,22 @@ export default function App() {
   const handleAnalysisEnqueued = useCallback(() => {
     // Marcar como ocupado para que la próxima transición dispare loadData
     prevQueueBusyRef.current = true;
+  }, []);
+
+  // ── Sincronización URL bidireccional ───────────────────────────────────────
+  // Cuando cambia la vista activa → actualizar URL (para bookmarks / compartir)
+  useEffect(() => {
+    const path = VIEW_TO_PATH[activeView];
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
+  }, [activeView]);
+
+  // Cuando el usuario pulsa Atrás/Adelante en el navegador → sincronizar vista
+  useEffect(() => {
+    const onPop = () => setActiveView(viewFromPath());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   // ── Renderizado condicional de vistas ──────────────────────────────────────

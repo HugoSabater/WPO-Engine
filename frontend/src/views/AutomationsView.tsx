@@ -4,6 +4,7 @@ import {
   getAlerts,     createAlert,    deleteAlert   as apiDeleteAlert,
   type CronJobRow, type AlertRow, type Strategy, type AlertDevice, type AlertMetric,
 } from '../services/api';
+import { translateCron, formatLastRun } from '../utils/wpoTranslator';
 
 // ─── Tipos locales UI (no expuestos hacia afuera) ─────────────────────────────
 type CronMode = 'basic' | 'advanced';
@@ -364,9 +365,14 @@ function CronjobsPanel() {
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-[10px] text-charcoal-500 capitalize">{job.strategy}</span>
                   <span className="text-charcoal-700">·</span>
-                  <code className="text-[10px] font-mono text-emerald-400/80">{job.cron_expression}</code>
+                  {/* Texto legible en lugar de la expresión cron técnica */}
+                  <span className="text-[10px] text-emerald-400/80">{translateCron(job.cron_expression)}</span>
                   <span className="text-charcoal-700">·</span>
-                  <span className="text-[10px] text-charcoal-600">Último: {job.last_run ?? '—'}</span>
+                  <code className="text-[10px] font-mono text-charcoal-700" title={job.cron_expression}>
+                    {job.cron_expression}
+                  </code>
+                  <span className="text-charcoal-700">·</span>
+                  <span className="text-[10px] text-charcoal-600">Último: {formatLastRun(job.last_run)}</span>
                 </div>
               </div>
               <StatusBadge active={job.active} />

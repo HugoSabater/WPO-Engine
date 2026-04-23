@@ -77,6 +77,20 @@ export async function fetchMetrics(): Promise<MetricRow[]> {
 }
 
 /**
+ * Historial completo sin límite — usado por el módulo Reports para CSV fidedigno.
+ * Aplica el mismo scoring heurístico que fetchMetrics.
+ */
+export async function fetchAllMetrics(): Promise<MetricRow[]> {
+  const res = await fetch(`${API_URL}/api/audit/all`);
+  if (!res.ok) throw new Error(`API Error (all): ${res.status}`);
+  const json = await res.json();
+  return json.data.map((row: MetricRow) => ({
+    ...row,
+    score: calculateScore(row),
+  }));
+}
+
+/**
  * Heurística de scoring simplificada para MVP (0-100).
  * Basada en los umbrales de Core Web Vitals de Google.
  */
@@ -94,7 +108,33 @@ function calculateScore(row: MetricRow): number {
 }
 
 /**
+ * Devuelve SOLO el último registro por URL única.
+ * Es el conjunto correcto para el Dashboard de "Estado de Salud Actual".
+ * O(n) usando un Map: conserva el registro con mayor timestamp por URL.
+ */
+export function getLatestPerSite(metrics: MetricRow[]): MetricRow[] {
+  const latest = new Map<string, MetricRow>();
+  for (const row of metrics) {
+    const existing = latest.get(row.url);
+    if (!existing || row.timestamp > existing.timestamp) {
+      latest.set(row.url, row);
+    }
+  }
+  return Array.from(latest.values());
+}
+
+/**
+ * Filtra registros de los últimos N días (por defecto 30).
+ * Usado por el toggle temporal del Dashboard.
+ */
+export function filterByDays(metrics: MetricRow[], days = 30): MetricRow[] {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return metrics.filter(r => r.timestamp >= cutoff);
+}
+
+/**
  * Genera los 3 Insights críticos a partir de los datos reales.
+ * Debe recibir el conjunto ya filtrado (latestPerSite o filtro temporal).
  */
 export function buildPriorityInsights(metrics: MetricRow[]): PriorityInsight[] {
   if (!metrics.length) return [];

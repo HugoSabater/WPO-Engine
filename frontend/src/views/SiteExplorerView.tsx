@@ -1,24 +1,447 @@
-// ─── Vista: Site Explorer ─────────────────────────────────────────────────────
-// Fase futura: Árbol interactivo de todas las URLs rastreadas con historial
-// de scores por ruta, comparación de versiones y drill-down por subpágina.
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchAllMetrics, enqueueAudit } from '../services/api';
+import type { MetricRow } from '../types';
+
+// ─── Tipos internos ────────────────────────────────────────────────────────────
+interface SiteCard {
+  url:           string;
+  latest:        MetricRow;
+  history:       MetricRow[];   // ordenado desc por timestamp
+  scoreHistory:  number[];      // últimos N scores para sparkline
+  hasBaseline:   boolean;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function scoreColor(s: number) {
+  if (s >= 90) return 'text-emerald-400';
+  if (s >= 50) return 'text-amber-400';
+  return 'text-red-400';
+}
+function scoreRing(s: number) {
+  if (s >= 90) return 'border-emerald-500/60';
+  if (s >= 50) return 'border-amber-500/60';
+  return 'border-red-500/60';
+}
+function scoreBg(s: number) {
+  if (s >= 90) return 'bg-emerald-500/10';
+  if (s >= 50) return 'bg-amber-500/10';
+  return 'bg-red-500/10';
+}
+function metricColor(val: number | null | undefined, warn: number, crit: number) {
+  if (val == null) return 'text-charcoal-500';
+  if (val > crit)  return 'text-red-400';
+  if (val > warn)  return 'text-amber-400';
+  return 'text-emerald-400';
+}
+function fmtTs(ts: number) {
+  if (!ts || ts <= 0) return '—';
+  return new Date(ts).toLocaleDateString('es-ES', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+function fmtUrl(url: string) {
+  try { return new URL(url).hostname + new URL(url).pathname; }
+  catch { return url; }
+}
+
+// ─── Sparkline SVG inline ─────────────────────────────────────────────────────
+function Sparkline({ values, className = '' }: { values: number[]; className?: string }) {
+  if (values.length < 2) return <span className="text-charcoal-700 text-xs">–</span>;
+  const W = 72; const H = 28;
+  const max = Math.max(...values); const min = Math.min(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const last = values[values.length - 1];
+  const stroke = last >= 90 ? '#34d399' : last >= 50 ? '#fbbf24' : '#f87171';
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className={className}>
+      <polyline fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" points={pts} />
+    </svg>
+  );
+}
+
+// ─── Skeleton de tarjeta ──────────────────────────────────────────────────────
+function CardSkeleton() {
+  return (
+    <div className="rounded-xl border border-charcoal-700/40 bg-charcoal-900/60 p-5 animate-pulse space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-charcoal-800" />
+        <div className="flex-1 space-y-1.5">
+          <div className="h-3 bg-charcoal-800 rounded w-3/4" />
+          <div className="h-2 bg-charcoal-800/60 rounded w-1/2" />
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="h-10 bg-charcoal-800/70 rounded-lg" />
+        ))}
+      </div>
+      <div className="h-2 bg-charcoal-800/40 rounded w-full" />
+    </div>
+  );
+}
+
+// ─── Tarjeta de Sitio ─────────────────────────────────────────────────────────
+function SiteCardComponent({ card, onRescan }: { card: SiteCard; onRescan: (url: string, strategy: string) => void }) {
+  const { latest, scoreHistory, hasBaseline } = card;
+  const score   = latest.score ?? 0;
+  const device  = latest.strategy ?? 'mobile';
+  const auditCount = card.history.length;
+
+  return (
+    <div className={`
+      group relative rounded-xl border bg-charcoal-900/60 p-5
+      flex flex-col gap-4 transition-all duration-200
+      hover:border-charcoal-600/60 hover:bg-charcoal-800/40 hover:shadow-lg hover:shadow-black/20
+      ${hasBaseline ? 'border-charcoal-700/50' : 'border-charcoal-800/50'}
+    `}>
+
+      {/* Baseline badge */}
+      {hasBaseline && (
+        <span className="absolute top-3 right-3 text-[9px] font-bold uppercase tracking-widest
+          px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-400">
+          Baseline
+        </span>
+      )}
+
+      {/* Cabecera: Score + URL */}
+      <div className="flex items-center gap-3 pr-16">
+        <div className={`
+          w-11 h-11 rounded-full border-2 flex-shrink-0 flex items-center justify-center
+          font-bold text-sm ${scoreColor(score)} ${scoreRing(score)} ${scoreBg(score)}
+        `}>
+          {score}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-charcoal-100 truncate" title={card.url}>
+            {fmtUrl(card.url)}
+          </p>
+          <p className="text-[10px] text-charcoal-500 mt-0.5 flex items-center gap-1.5">
+            {/* Icono dispositivo */}
+            {device === 'desktop' ? (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+            )}
+            {device} · {auditCount} {auditCount === 1 ? 'auditoría' : 'auditorías'}
+          </p>
+        </div>
+      </div>
+
+      {/* Métricas CWV */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: 'TTFB', val: latest.ttfb, fmt: (v: number) => `${v.toFixed(0)}ms`, warn: 800,  crit: 1800 },
+          { label: 'LCP',  val: latest.lcp,  fmt: (v: number) => `${(v/1000).toFixed(2)}s`, warn: 2500, crit: 4000 },
+          { label: 'CLS',  val: latest.cls,  fmt: (v: number) => v.toFixed(3), warn: 0.1, crit: 0.25 },
+          { label: 'TBT',  val: latest.tbt,  fmt: (v: number) => `${v.toFixed(0)}ms`, warn: 300,  crit: 600 },
+        ].map(({ label, val, fmt, warn, crit }) => (
+          <div key={label} className="rounded-lg bg-charcoal-800/60 border border-charcoal-700/30 px-2.5 py-2 text-center">
+            <p className="text-[9px] text-charcoal-500 uppercase tracking-widest font-medium mb-0.5">{label}</p>
+            <p className={`text-[11px] font-mono font-semibold ${metricColor(val, warn, crit)}`}>
+              {val != null ? fmt(val) : '—'}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Sparkline + fecha */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-[9px] text-charcoal-600 uppercase tracking-widest">Tendencia score</p>
+          <Sparkline values={scoreHistory} />
+        </div>
+        <div className="text-right">
+          <p className="text-[9px] text-charcoal-600 uppercase tracking-widest">Último análisis</p>
+          <p className="text-[10px] text-charcoal-400 mt-0.5">{fmtTs(latest.timestamp)}</p>
+        </div>
+      </div>
+
+      {/* Footer: Re-escanear */}
+      <div className="flex items-center justify-between pt-1 border-t border-charcoal-800/60">
+        <a
+          href={card.url} target="_blank" rel="noopener noreferrer"
+          className="text-[10px] text-charcoal-600 hover:text-blue-400 transition-colors flex items-center gap-1"
+          onClick={e => e.stopPropagation()}
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+          </svg>
+          Abrir URL
+        </a>
+        <button
+          onClick={() => onRescan(card.url, device)}
+          className="flex items-center gap-1.5 text-[10px] font-medium text-charcoal-400
+            hover:text-charcoal-100 hover:bg-charcoal-700/60 px-2.5 py-1.5 rounded-lg transition-colors"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Re-escanear
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Vista Principal ──────────────────────────────────────────────────────────
+type SortMode = 'score_asc' | 'score_desc' | 'date_desc' | 'url_asc';
+type DeviceFilter = 'all' | 'mobile' | 'desktop';
 
 export default function SiteExplorerView() {
+  const [rows,    setRows]    = useState<MetricRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+  const [search,  setSearch]  = useState('');
+  const [sort,    setSort]    = useState<SortMode>('score_asc');
+  const [device,  setDevice]  = useState<DeviceFilter>('all');
+  const [rescanningUrl, setRescanningUrl] = useState<string | null>(null);
+  const [rescanMsg, setRescanMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const data = await fetchAllMetrics();
+      setRows(data);
+    } catch (e: any) {
+      setError(e.message ?? 'Error cargando datos.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Agrupar por URL ───────────────────────────────────────────────────────
+  const cards = useMemo<SiteCard[]>(() => {
+    const groups: Record<string, MetricRow[]> = {};
+    rows.forEach(r => {
+      if (!groups[r.url]) groups[r.url] = [];
+      groups[r.url].push(r);
+    });
+
+    return Object.entries(groups).map(([url, recs]) => {
+      const sorted = [...recs].sort((a, b) => b.timestamp - a.timestamp);
+      const latest = sorted[0];
+      const scoreHistory = sorted.slice(0, 10).reverse().map(r => r.score ?? 0);
+      const hasBaseline  = recs.some(r => r.is_baseline === 1);
+      return { url, latest, history: sorted, scoreHistory, hasBaseline };
+    });
+  }, [rows]);
+
+  // ── Filtrar y ordenar ─────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    let list = cards.filter(c => {
+      if (device !== 'all' && c.latest.strategy !== device) return false;
+      if (search && !c.url.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+    switch (sort) {
+      case 'score_asc':  list.sort((a, b) => (a.latest.score ?? 0) - (b.latest.score ?? 0)); break;
+      case 'score_desc': list.sort((a, b) => (b.latest.score ?? 0) - (a.latest.score ?? 0)); break;
+      case 'date_desc':  list.sort((a, b) => b.latest.timestamp - a.latest.timestamp); break;
+      case 'url_asc':    list.sort((a, b) => a.url.localeCompare(b.url)); break;
+    }
+    return list;
+  }, [cards, search, sort, device]);
+
+  // ── Re-escaneo ────────────────────────────────────────────────────────────
+  const handleRescan = async (url: string, strategy: string) => {
+    setRescanningUrl(url);
+    setRescanMsg(null);
+    try {
+      await enqueueAudit(url, strategy as 'mobile' | 'desktop');
+      setRescanMsg(`✓ Re-escaneo encolado para ${fmtUrl(url)}`);
+      setTimeout(() => setRescanMsg(null), 4000);
+    } catch (e: any) {
+      setRescanMsg(`✗ Error: ${e.message}`);
+      setTimeout(() => setRescanMsg(null), 5000);
+    } finally {
+      setRescanningUrl(null);
+    }
+  };
+
+  // ─── Estadísticas rápidas de cabecera ─────────────────────────────────────
+  const stats = useMemo(() => {
+    if (!cards.length) return null;
+    const scores = cards.map(c => c.latest.score ?? 0);
+    const avg    = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    const crit   = scores.filter(s => s < 50).length;
+    const ok     = scores.filter(s => s >= 90).length;
+    return { avg, crit, ok, total: cards.length };
+  }, [cards]);
+
   return (
-    <main className="max-w-screen-2xl mx-auto px-6 py-16 flex flex-col items-center justify-center text-center">
-      <div className="w-16 h-16 rounded-2xl bg-charcoal-800 border border-charcoal-700/50 flex items-center justify-center mb-6">
-        <svg className="w-8 h-8 text-charcoal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-        </svg>
+    <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
+
+      {/* ── Cabecera ── */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-charcoal-100">Site Explorer</h2>
+          <p className="text-xs text-charcoal-500 mt-0.5">
+            Estado de salud de cada URL monitoreada · última auditoría y tendencia de score
+          </p>
+        </div>
+        <button
+          onClick={load} disabled={loading}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+            bg-charcoal-800 border border-charcoal-700/60 text-charcoal-300
+            hover:bg-charcoal-700 hover:text-charcoal-100 transition-colors disabled:opacity-50"
+        >
+          <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Actualizar
+        </button>
       </div>
-      <h2 className="text-xl font-semibold text-charcoal-200 mb-2">Site Explorer</h2>
-      <p className="text-sm text-charcoal-500 max-w-md leading-relaxed">
-        Árbol interactivo de todas las URLs rastreadas. Visualiza el historial de scores por ruta,
-        compara versiones en el tiempo y haz drill-down por subpágina para identificar regresiones.
-      </p>
-      <div className="mt-8 px-4 py-2 rounded-full bg-charcoal-800 border border-charcoal-700/40">
-        <span className="text-[11px] text-charcoal-500 uppercase tracking-widest font-medium">Próximamente · Fase 3</span>
-      </div>
+
+      {/* ── Rescan toast ── */}
+      {rescanMsg && (
+        <div className={`text-xs px-4 py-2.5 rounded-lg border font-medium
+          ${rescanMsg.startsWith('✓')
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+          {rescanMsg}
+        </div>
+      )}
+
+      {/* ── Stats rápidas ── */}
+      {!loading && !error && stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'URLs monitoreadas', value: stats.total, color: 'text-charcoal-200' },
+            { label: 'Score promedio',    value: stats.avg,   color: scoreColor(stats.avg) },
+            { label: 'En buen estado',    value: stats.ok,    color: 'text-emerald-400' },
+            { label: 'Estado crítico',    value: stats.crit,  color: stats.crit > 0 ? 'text-red-400' : 'text-charcoal-500' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="rounded-xl bg-charcoal-900/60 border border-charcoal-800/60 px-4 py-3">
+              <p className="text-[10px] text-charcoal-500 uppercase tracking-widest mb-1">{label}</p>
+              <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Filtros ── */}
+      {!loading && !error && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Búsqueda */}
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-charcoal-500 pointer-events-none"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input
+              type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Filtrar por URL…"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-charcoal-800 border border-charcoal-700/60 rounded-lg
+                text-charcoal-200 placeholder-charcoal-600
+                focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30 transition-colors"
+            />
+          </div>
+
+          {/* Dispositivo */}
+          <select value={device} onChange={e => setDevice(e.target.value as DeviceFilter)}
+            className="px-3 py-2 text-xs bg-charcoal-800 border border-charcoal-700/60 rounded-lg
+              text-charcoal-300 cursor-pointer focus:outline-none focus:border-blue-500/70 transition-colors">
+            <option value="all">Todos los dispositivos</option>
+            <option value="mobile">Mobile</option>
+            <option value="desktop">Desktop</option>
+          </select>
+
+          {/* Ordenar */}
+          <select value={sort} onChange={e => setSort(e.target.value as SortMode)}
+            className="px-3 py-2 text-xs bg-charcoal-800 border border-charcoal-700/60 rounded-lg
+              text-charcoal-300 cursor-pointer focus:outline-none focus:border-blue-500/70 transition-colors">
+            <option value="score_asc">Score: peor primero</option>
+            <option value="score_desc">Score: mejor primero</option>
+            <option value="date_desc">Más reciente</option>
+            <option value="url_asc">URL (A→Z)</option>
+          </select>
+
+          {/* Contador */}
+          <div className="flex items-center px-3 py-2 rounded-lg bg-charcoal-800/40 border border-charcoal-700/30">
+            <span className="text-xs text-charcoal-500 font-mono">
+              <span className="text-charcoal-200 font-semibold">{filtered.length}</span>
+              /{cards.length} sitios
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading: Skeleton grid ── */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
+      )}
+
+      {/* ── Error ── */}
+      {!loading && error && (
+        <div className="card flex items-center gap-3 py-6 border-red-500/20 bg-red-500/5">
+          <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div>
+            <p className="text-xs font-medium text-red-400">Error cargando datos</p>
+            <p className="text-[11px] text-charcoal-500 mt-0.5">{error}</p>
+          </div>
+          <button onClick={load}
+            className="ml-auto text-xs text-red-400 hover:text-red-300 underline transition-colors">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* ── Vacío ── */}
+      {!loading && !error && filtered.length === 0 && (
+        <div className="card flex flex-col items-center justify-center py-20 gap-4">
+          <svg className="w-12 h-12 text-charcoal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+          </svg>
+          <p className="text-sm text-charcoal-500">
+            {cards.length === 0
+              ? 'No hay URLs monitoreadas aún. Lanza tu primer análisis desde Dashboard.'
+              : 'Ninguna URL coincide con los filtros actuales.'}
+          </p>
+          {cards.length > 0 && (
+            <button onClick={() => { setSearch(''); setDevice('all'); }}
+              className="text-xs text-blue-400 hover:text-blue-300 underline transition-colors">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Grid de tarjetas ── */}
+      {!loading && !error && filtered.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map(card => (
+            <SiteCardComponent
+              key={card.url}
+              card={card}
+              onRescan={handleRescan}
+            />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

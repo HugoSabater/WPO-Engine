@@ -54,3 +54,71 @@ export function translateMetrics(metrics: MetricRow): WpoTranslationResult {
     isPerfect: insights.length === 0
   };
 }
+
+// ─── Cron Translator ──────────────────────────────────────────────────────────
+
+const DAYS_ES = ['Domingos', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábados'];
+
+/**
+ * Convierte una expresión cron a texto legible en español.
+ *
+ * Patrones soportados:
+ *  `0 H * * *`    → Diario (HH:00)
+ *  `0 H * * D`    → Semanal — Nombre_día (HH:00)
+ *  `0 H D * *`    → Mensual — Día D (HH:00)
+ *  `0 H * * 1-5`  → Días laborables (HH:00)
+ *  `0 H * * 0,6`  → Fines de semana (HH:00)
+ *  Cualquier otro → Personalizada: [expr]
+ */
+export function translateCron(cron: string): string {
+  if (!cron?.trim()) return '—';
+
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return `Personalizada: ${cron}`;
+
+  const [min, hour, dom, month, dow] = parts;
+
+  if (!/^\d+$/.test(min) || month !== '*') return `Personalizada: ${cron}`;
+
+  const hourNum = parseInt(hour, 10);
+  const isValidHour = /^\d+$/.test(hour) && hourNum >= 0 && hourNum <= 23;
+  const timeSuffix = isValidHour
+    ? ` (${String(hourNum).padStart(2, '0')}:${min.padStart(2, '0')})`
+    : '';
+
+  // Diario
+  if (dom === '*' && dow === '*') return `Diario${timeSuffix}`;
+
+  // Días laborables
+  if (dom === '*' && dow === '1-5') return `Días laborables${timeSuffix}`;
+
+  // Fines de semana
+  if (dom === '*' && (dow === '0,6' || dow === '6,0')) return `Fines de semana${timeSuffix}`;
+
+  // Semanal (día concreto 0-6)
+  if (dom === '*' && /^[0-6]$/.test(dow)) {
+    return `Semanal — ${DAYS_ES[parseInt(dow, 10)]}${timeSuffix}`;
+  }
+
+  // Mensual (día del mes concreto)
+  if (/^\d+$/.test(dom) && dow === '*') {
+    return `Mensual — Día ${parseInt(dom, 10)}${timeSuffix}`;
+  }
+
+  return `Personalizada: ${cron}`;
+}
+
+/**
+ * Formatea el campo last_run (ISO string | null) a texto legible.
+ */
+export function formatLastRun(lastRun: string | null | undefined): string {
+  if (!lastRun) return '—';
+  try {
+    return new Date(lastRun).toLocaleString('es-ES', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return lastRun;
+  }
+}

@@ -89,6 +89,30 @@ const db = new sqlite3.Database(dbPath);
             });
         }
 
+        /**
+         * Devuelve TODO el historial sin límite artificial.
+         * Usado exclusivamente por el módulo Reports para exportación completa.
+         */
+        public static getAllMetrics(): Promise<any[]> {
+            return new Promise((resolve, reject) => {
+                const query = `
+                    SELECT 
+                        m.*,
+                        b.lcp  as baseline_lcp,
+                        b.ttfb as baseline_ttfb,
+                        b.tbt  as baseline_tbt,
+                        b.cls  as baseline_cls
+                    FROM metrics m
+                    LEFT JOIN metrics b ON m.url = b.url AND b.is_baseline = 1
+                    ORDER BY m.timestamp DESC
+                `;
+                db.all(query, [], (err: any, rows: any[]) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
+            });
+        }
+
         public static setBaseline(id: number): Promise<void> {
             return new Promise((resolve, reject) => {
                 db.get('SELECT url FROM metrics WHERE id = ?', [id], (err: any, row: any) => {
