@@ -1,11 +1,17 @@
 import sqlite3 from 'sqlite3';
 import { resolve } from 'path';
 
-// En producción Docker el volumen está en /app/db
-const dbPath = process.env.NODE_ENV === 'development' 
-    ? resolve(__dirname, '../../wpo-historics.sqlite') 
-    : '/app/db/wpo-historics.sqlite';
+// Prioridad de rutas (mayor a menor):
+//  1. WPO_DB_PATH — inyectado por Electron antes de importar este módulo
+//  2. Desarrollo local — carpeta raíz del proyecto
+//  3. Docker           — volumen persistente montado en /app/db
+function resolveDbPath(): string {
+    if (process.env.WPO_DB_PATH) return process.env.WPO_DB_PATH;
+    if (process.env.NODE_ENV === 'development') return resolve(__dirname, '../../wpo-historics.sqlite');
+    return '/app/db/wpo-historics.sqlite';
+}
 
+const dbPath = resolveDbPath();
 const db = new sqlite3.Database(dbPath);
 
     db.serialize(() => {
