@@ -78,7 +78,9 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 // ─── Vista Principal ──────────────────────────────────────────────────────────
-export default function ReportsView() {
+export default function ReportsView({ onCreateAutomation }: {
+  onCreateAutomation?: (url: string) => void;
+}) {
   const [rows,    setRows]    = useState<MetricRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -333,7 +335,7 @@ export default function ReportsView() {
                     </th>
                   ))}
                   {/* Columnas fijas */}
-                  {['URL', 'Disp.', 'Baseline'].map(h => (
+                  {['URL', 'Disp.', 'Baseline', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium text-charcoal-400 whitespace-nowrap">
                       {h}
                     </th>
@@ -430,6 +432,23 @@ export default function ReportsView() {
                         ) : (
                           <span className="text-charcoal-700 text-[10px]">—</span>
                         )}
+                      </td>
+
+                      {/* Crear automatización */}
+                      <td className="px-3 py-2.5">
+                        <button
+                          onClick={() => onCreateAutomation?.(row.url)}
+                          title="Crear automatización"
+                          className="group flex items-center justify-center w-7 h-7 rounded-lg
+                            text-charcoal-600 hover:text-blue-400 hover:bg-blue-500/10
+                            border border-transparent hover:border-blue-500/20
+                            transition-all duration-150"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   );

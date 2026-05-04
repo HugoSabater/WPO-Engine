@@ -38,6 +38,9 @@ export default function App() {
   // ── Navegación SPA — inicializada desde la URL actual ───────────────────────
   const [activeView, setActiveView] = useState<ActiveView>(viewFromPath);
 
+  // ── Prefill de URL para AutomationsView (desde Reports → Automations) ────────
+  const [prefillUrl, setPrefillUrl] = useState<string>('');
+
   // ── Datos globales del Dashboard ───────────────────────────────────────────
   const [metrics,   setMetrics]   = useState<MetricRow[]>([]);
   const [insights,  setInsights]  = useState<PriorityInsight[]>([]);
@@ -105,6 +108,12 @@ export default function App() {
     prevQueueBusyRef.current = true;
   }, []);
 
+  // ── Navegación contextual: Reports → Automations con URL prefilled ──────────
+  const navigateToAutomations = useCallback((url: string) => {
+    setPrefillUrl(url);
+    setActiveView('automations');
+  }, []);
+
   // ── Sincronización URL bidireccional ───────────────────────────────────────
   // Cuando cambia la vista activa → actualizar URL (para bookmarks / compartir)
   useEffect(() => {
@@ -138,9 +147,9 @@ export default function App() {
       case 'explorer':
         return <SiteExplorerView />;
       case 'automations':
-        return <AutomationsView />;
+        return <AutomationsView prefillUrl={prefillUrl} onPrefillConsumed={() => setPrefillUrl('')} />;
       case 'reports':
-        return <ReportsView />;
+        return <ReportsView onCreateAutomation={navigateToAutomations} />;
     }
   };
 

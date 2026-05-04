@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   getCronjobs,   createCronjob,  toggleCronjob as apiToggleCronjob, deleteCronjob as apiDeleteCronjob,
   getAlerts,     createAlert,    deleteAlert   as apiDeleteAlert,
@@ -235,13 +235,28 @@ function MetricSelector({ thresholds, onChange }: {
   );
 }
 
-// ─── Columna 1: CronjobsPanel ────────────────────────────────────────────────
-function CronjobsPanel() {
+// ─── Columna 1: CronjobsPanel ───────────────────────────────────────────────────────────
+function CronjobsPanel({ initialUrl = '', onPrefillConsumed }: {
+  initialUrl?:         string;
+  onPrefillConsumed?:  () => void;
+}) {
   const [jobs,     setJobs]     = useState<CronJobRow[]>([]);
   const [loading,  setLoading]  = useState(true);
-  const [url,      setUrl]      = useState('');
+  const [url,      setUrl]      = useState(initialUrl);
   const [strategy, setStrategy] = useState<Strategy>('mobile');
   const [cronCfg,  setCronCfg]  = useState<CronConfig>({ mode: 'basic', freq: 'daily', day: '1', hour: '3' });
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Sincronizar cuando llega un prefill desde Reports
+  useEffect(() => {
+    if (!initialUrl) return;
+    setUrl(initialUrl);
+    // Scroll suave al formulario para que el usuario lo vea
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    onPrefillConsumed?.();
+  // Solo reaccionar cuando cambia initialUrl (no en cada render)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialUrl]);
 
   const resolveCron = (cfg: CronConfig): string =>
     cfg.mode === 'basic' ? buildCronExpr(cfg) : cfg.expr;
@@ -308,7 +323,7 @@ function CronjobsPanel() {
       </div>
 
       {/* Formulario */}
-      <form onSubmit={handleCreate} className="bg-charcoal-800/40 border border-charcoal-700/30 rounded-xl p-4 space-y-4">
+      <form ref={formRef} onSubmit={handleCreate} className="bg-charcoal-800/40 border border-charcoal-700/30 rounded-xl p-4 space-y-4">
         <p className="text-[10px] text-charcoal-500 uppercase tracking-widest font-semibold">Nueva tarea</p>
 
         <div>
@@ -318,7 +333,7 @@ function CronjobsPanel() {
             value={url}
             onChange={e => setUrl(e.target.value)}
             placeholder="https://floressolidarias.org/ramos"
-            className={INPUT_CLS}
+            className={`${INPUT_CLS} ${url ? 'border-blue-500/50 ring-1 ring-blue-500/20' : ''}`}
             required
           />
         </div>
@@ -552,8 +567,11 @@ function AlertsPanel() {
   );
 }
 
-// ─── Vista Principal ──────────────────────────────────────────────────────────
-export default function AutomationsView() {
+// ─── Vista Principal ───────────────────────────────────────────────────────────────────
+export default function AutomationsView({ prefillUrl = '', onPrefillConsumed }: {
+  prefillUrl?:         string;
+  onPrefillConsumed?:  () => void;
+}) {
   return (
     <main className="max-w-screen-2xl mx-auto px-6 py-6">
       <div className="mb-6">
@@ -564,7 +582,7 @@ export default function AutomationsView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <CronjobsPanel />
+        <CronjobsPanel initialUrl={prefillUrl} onPrefillConsumed={onPrefillConsumed} />
         <AlertsPanel />
       </div>
     </main>
