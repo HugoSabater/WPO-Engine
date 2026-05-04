@@ -66,6 +66,7 @@ function exportToCsv(rows: MetricRow[], filename: string) {
 type SortKey = 'score' | 'ttfb' | 'lcp' | 'cls' | 'tbt' | 'domSize' | 'timestamp';
 type SortDir = 'asc' | 'desc';
 type DeviceFilter = 'all' | 'mobile' | 'desktop';
+type HealthFilter = 'all' | 'critical' | 'improvable' | 'optimal';
 
 // ─── Componente: SortIcon ─────────────────────────────────────────────────────
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
@@ -83,9 +84,10 @@ export default function ReportsView() {
   const [error,   setError]   = useState<string | null>(null);
 
   // Filtros
-  const [search,  setSearch]  = useState('');
-  const [device,  setDevice]  = useState<DeviceFilter>('all');
+  const [search,       setSearch]       = useState('');
+  const [device,       setDevice]       = useState<DeviceFilter>('all');
   const [onlyBaseline, setOnlyBaseline] = useState(false);
+  const [health,       setHealth]       = useState<HealthFilter>('all');
 
   // Sort
   const [sortKey, setSortKey] = useState<SortKey>('timestamp');
@@ -117,6 +119,10 @@ export default function ReportsView() {
       if (device !== 'all' && r.strategy !== device) return false;
       if (onlyBaseline && r.is_baseline !== 1)        return false;
       if (search && !r.url.toLowerCase().includes(search.toLowerCase())) return false;
+      const s = r.score ?? 0;
+      if (health === 'critical'  && s >= 50)  return false;
+      if (health === 'improvable' && (s < 50 || s >= 90)) return false;
+      if (health === 'optimal'   && s < 90)   return false;
       return true;
     })
     .sort((a, b) => {
@@ -220,6 +226,20 @@ export default function ReportsView() {
           <option value="desktop">Desktop</option>
         </select>
 
+        {/* Estado de salud */}
+        <select
+          id="health-filter"
+          value={health}
+          onChange={e => setHealth(e.target.value as HealthFilter)}
+          className="px-3 py-2 text-xs bg-charcoal-800 border border-charcoal-700/60 rounded-lg
+            text-charcoal-300 cursor-pointer focus:outline-none focus:border-blue-500/70 transition-colors"
+        >
+          <option value="all">Todas las puntuaciones</option>
+          <option value="critical">Críticas (&lt; 50)</option>
+          <option value="improvable">Mejorables (50–89)</option>
+          <option value="optimal">Óptimas (&ge; 90)</option>
+        </select>
+
         {/* Solo Baseline */}
         <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-charcoal-800 border border-charcoal-700/60 cursor-pointer select-none">
           <input
@@ -285,7 +305,7 @@ export default function ReportsView() {
           </p>
           {rows.length > 0 && (
             <button
-              onClick={() => { setSearch(''); setDevice('all'); setOnlyBaseline(false); }}
+              onClick={() => { setSearch(''); setDevice('all'); setOnlyBaseline(false); setHealth('all'); }}
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
             >
               Limpiar filtros
