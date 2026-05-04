@@ -42,6 +42,7 @@
     }
   },
   "devDependencies": {
+    "@types/cheerio": "^0.22.35",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.27",
     "electron": "^36.2.1",
@@ -60,6 +61,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "cheerio": "^1.2.0",
     "chrome-launcher": "^1.2.1",
     "compression": "^1.8.1",
     "cors": "^2.8.6",

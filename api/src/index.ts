@@ -3,6 +3,7 @@ import cors from 'cors';
 import compression from 'compression';
 import { WPOController } from './controllers/wpo.controller';
 import { AutomationsController } from './controllers/automations.controller';
+import { CrawlerController } from './controllers/crawler.controller';
 import { QueueService } from './services/queue.service';
 import { Database } from './models/database';
 
@@ -10,6 +11,9 @@ const app = express();
 app.use(cors());
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
+
+// ── Web Crawler ──────────────────────────────────────────────────────────────
+app.get('/api/crawl', CrawlerController.crawl);
 
 // Endpoints de auditoría
 app.post('/api/audit/batch', WPOController.enqueueBatchAudit);

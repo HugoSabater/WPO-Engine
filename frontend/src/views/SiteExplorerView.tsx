@@ -2,6 +2,26 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchAllMetrics, enqueueAudit } from '../services/api';
 import type { MetricRow } from '../types';
 
+// ─── API Crawler ──────────────────────────────────────────────────────────────
+async function crawlUrl(url: string, limit: number): Promise<string[]> {
+  const res = await fetch(`/api/crawl?url=${encodeURIComponent(url)}&limit=${limit}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Error ${res.status} al rastrear`);
+  }
+  const data = await res.json();
+  return data.urls as string[];
+}
+
+async function enqueueBatch(urls: string[]): Promise<void> {
+  const res = await fetch('/api/audit/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ urls }),
+  });
+  if (!res.ok) throw new Error(`Error ${res.status} encolando batch`);
+}
+
 // ─── Tipos internos ────────────────────────────────────────────────────────────
 interface SiteCard {
   url:           string;
@@ -211,6 +231,32 @@ export default function SiteExplorerView() {
   const [rescanningUrl, setRescanningUrl] = useState<string | null>(null);
   const [rescanMsg, setRescanMsg] = useState<string | null>(null);
 
+  // ── Crawler state ─────────────────────────────────────────────────────────
+  const [crawlEnabled,  setCrawlEnabled]  = useState(false);
+  const [crawlUrl_,     setCrawlUrl_]     = useState('');
+  const [crawlLimit,    setCrawlLimit]    = useState(10);
+  const [crawlStatus,   setCrawlStatus]   = useState<'idle'|'crawling'|'queuing'|'done'|'error'>('idle');
+  const [crawlMsg,      setCrawlMsg]      = useState<string | null>(null);
+
+  const handleCrawlAndAudit = async () => {
+    if (!crawlUrl_) { setCrawlMsg('Introduce una URL base para rastrear.'); return; }
+    try { new URL(crawlUrl_); } catch { setCrawlMsg('URL inválida. Incluye http:// o https://'); return; }
+    setCrawlStatus('crawling'); setCrawlMsg(null);
+    try {
+      const urls = await crawlUrl(crawlUrl_, crawlLimit);
+      if (urls.length === 0) { setCrawlStatus('error'); setCrawlMsg('No se encontraron enlaces internos en esa URL.'); return; }
+      setCrawlStatus('queuing');
+      await enqueueBatch(urls);
+      setCrawlStatus('done');
+      setCrawlMsg(`✓ ${urls.length} URL${urls.length > 1 ? 's' : ''} encoladas para auditoría.`);
+      setTimeout(() => { setCrawlStatus('idle'); setCrawlMsg(null); }, 6000);
+    } catch (e: any) {
+      setCrawlStatus('error');
+      setCrawlMsg(`✗ ${e.message}`);
+      setTimeout(() => { setCrawlStatus('idle'); setCrawlMsg(null); }, 7000);
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -307,6 +353,109 @@ export default function SiteExplorerView() {
           </svg>
           Actualizar
         </button>
+      </div>
+
+      {/* ── Panel Web Crawler ── */}
+      <div className="rounded-xl border border-charcoal-700/50 bg-charcoal-900/50 p-4 space-y-3">
+        {/* Cabecera del panel */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            <span className="text-xs font-semibold text-charcoal-200">Web Crawler</span>
+            <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full
+              bg-blue-500/10 border border-blue-500/25 text-blue-400">Nuevo</span>
+          </div>
+          {/* Toggle */}
+          <button
+            id="crawler-toggle"
+            onClick={() => setCrawlEnabled(v => !v)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors
+              ${crawlEnabled ? 'bg-blue-600' : 'bg-charcoal-700'}`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform
+              ${crawlEnabled ? 'translate-x-4' : 'translate-x-0.5'}`}/>
+          </button>
+        </div>
+
+        {/* Cuerpo expandible */}
+        {crawlEnabled && (
+          <div className="space-y-3 pt-1 border-t border-charcoal-800/60">
+            <p className="text-[10px] text-charcoal-500">
+              Introduce una URL raíz. El sistema extraerá enlaces internos y los enviará en bloque a auditoría.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              {/* Input URL */}
+              <div className="relative flex-1">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-charcoal-500 pointer-events-none"
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                </svg>
+                <input
+                  id="crawl-url-input"
+                  type="url"
+                  value={crawlUrl_}
+                  onChange={e => setCrawlUrl_(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-charcoal-800 border border-charcoal-700/60 rounded-lg
+                    text-charcoal-200 placeholder-charcoal-600
+                    focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30 transition-colors"
+                />
+              </div>
+
+              {/* Input límite */}
+              <div className="flex items-center gap-2 shrink-0">
+                <label className="text-[10px] text-charcoal-500 whitespace-nowrap">Límite URLs</label>
+                <input
+                  id="crawl-limit-input"
+                  type="number" min={1} max={50} value={crawlLimit}
+                  onChange={e => setCrawlLimit(Math.min(50, Math.max(1, Number(e.target.value))))}
+                  className="w-16 px-2 py-2 text-xs text-center bg-charcoal-800 border border-charcoal-700/60
+                    rounded-lg text-charcoal-200 focus:outline-none focus:border-blue-500/70 transition-colors"
+                />
+              </div>
+
+              {/* Botón Analizar */}
+              <button
+                id="crawl-submit-btn"
+                onClick={handleCrawlAndAudit}
+                disabled={crawlStatus === 'crawling' || crawlStatus === 'queuing'}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold
+                  bg-blue-600 hover:bg-blue-500 text-white transition-colors
+                  disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+              >
+                {crawlStatus === 'crawling' && (
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                )}
+                {crawlStatus === 'queuing' && (
+                  <svg className="w-3.5 h-3.5 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/>
+                  </svg>
+                )}
+                {crawlStatus === 'crawling' ? 'Rastreando URLs…' :
+                 crawlStatus === 'queuing'  ? 'Encolando batch…' :
+                 'Rastrear y Auditar'}
+              </button>
+            </div>
+
+            {/* Feedback */}
+            {crawlMsg && (
+              <p className={`text-[11px] px-3 py-2 rounded-lg border
+                ${crawlMsg.startsWith('✓')
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                {crawlMsg}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Rescan toast ── */}

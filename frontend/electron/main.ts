@@ -32,12 +32,16 @@ async function startExpressServer(): Promise<void> {
   const { default: compression }      = await import('compression');
   const { WPOController }             = await import('../../api/src/controllers/wpo.controller.js');
   const { AutomationsController }     = await import('../../api/src/controllers/automations.controller.js');
+  const { CrawlerController }         = await import('../../api/src/controllers/crawler.controller.js');
   const { enqueueAudit, getQueueLength } = await import('./auditor.js');
 
   const server = express();
   server.use(cors());
   server.use(compression() as any);
   server.use(express.json({ limit: '10mb' }));
+
+  // ── Web Crawler ─────────────────────────────────────────────────────────────
+  server.get('/api/crawl', CrawlerController.crawl);
 
   // ── Rutas de auditoría ────────────────────────────────────────────────────
   // POST /api/audit/ondemand — ejecuta Lighthouse localmente vía auditor.ts
