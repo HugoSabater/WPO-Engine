@@ -5,15 +5,15 @@
   "type": "module",
   "main": "dist-electron/main.mjs",
   "scripts": {
-    "dev":              "vite",
-    "build":            "tsc && vite build",
-    "preview":          "vite preview",
-    "electron:dev":     "ELECTRON=true vite",
-    "electron:build":   "tsc && ELECTRON=true vite build && electron-builder",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "electron:dev": "ELECTRON=true vite",
+    "electron:build": "tsc && ELECTRON=true vite build && electron-builder",
     "electron:preview": "electron ."
   },
   "build": {
-    "appId":       "org.floressolidarias.wpo-engine",
+    "appId": "org.floressolidarias.wpo-engine",
     "productName": "WPO Analytics Engine",
     "directories": {
       "output": "release"
@@ -23,34 +23,52 @@
       "dist-electron/**/*"
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon":   "public/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.ico"
     },
     "nsis": {
-      "oneClick":             false,
+      "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon":        "public/icon.ico",
-      "uninstallerIcon":      "public/icon.ico",
-      "shortcutName":         "WPO Analytics Engine"
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "shortcutName": "WPO Analytics Engine"
     }
   },
   "devDependencies": {
-    "@vitejs/plugin-react":          "^5.1.4",
-    "autoprefixer":                  "^10.4.27",
-    "electron":                      "^36.2.1",
-    "electron-builder":              "^25.1.8",
-    "postcss":                       "^8.5.8",
-    "tailwindcss":                   "^3.4.19",
-    "typescript":                    "~5.9.3",
-    "vite":                          "^7.3.1",
-    "vite-plugin-electron":          "^0.29.0",
+    "@vitejs/plugin-react": "^5.1.4",
+    "autoprefixer": "^10.4.27",
+    "electron": "^36.2.1",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1",
+    "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "dependencies": {
-    "@types/react":     "^19.2.14",
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "react":            "^19.2.4",
-    "react-dom":        "^19.2.4",
-    "recharts":         "^3.7.0"
+    "chrome-launcher": "^1.2.1",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "cron": "^4.4.0",
+    "express": "^5.2.1",
+    "lighthouse": "^13.2.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.7.0",
+    "sqlite3": "^6.0.1"
   }
 }

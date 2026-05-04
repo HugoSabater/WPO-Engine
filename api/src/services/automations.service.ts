@@ -44,12 +44,15 @@ export interface CreateAlertDto {
 }
 
 // ─── Conexión compartida ──────────────────────────────────────────────────────
-// Usamos la misma ruta que database.ts para trabajar sobre el mismo archivo SQLite.
-const dbPath = process.env.NODE_ENV === 'development'
-    ? resolve(__dirname, '../../wpo-historics.sqlite')
-    : '/app/db/wpo-historics.sqlite';
+// Prioridad: WPO_DB_PATH (Electron) > dev local > Docker.
+// Debe coincidir con la lógica de database.ts para operar sobre el mismo archivo.
+function resolveDbPath(): string {
+    if (process.env.WPO_DB_PATH) return process.env.WPO_DB_PATH;
+    if (process.env.NODE_ENV === 'development') return resolve(__dirname, '../../wpo-historics.sqlite');
+    return '/app/db/wpo-historics.sqlite';
+}
 
-const db = new sqlite3.Database(dbPath);
+const db = new sqlite3.Database(resolveDbPath());
 
 // Helper interno: envuelve db.run en Promise y captura `this.lastID`
 function runInsert(sql: string, params: unknown[]): Promise<number> {
