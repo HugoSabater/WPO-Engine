@@ -1,8 +1,9 @@
 import type { MetricRow, PriorityInsight, ChartDataPoint } from '../types';
 
 // Usamos ruta relativa para que el proxy de Vite gestione el CORS internamente.
-// vite.config.ts redirige /api → http://localhost:3000
-const API_URL = '';
+// En producción en Electron (file://), el Frontend debe apuntar directamente al puerto 3000.
+// @ts-ignore
+export const API_URL = (typeof __ELECTRON_MODE__ !== 'undefined' && __ELECTRON_MODE__) ? 'http://127.0.0.1:3000' : '';
 
 export interface QueueStatus {
   waiting: number;

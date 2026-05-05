@@ -332,7 +332,7 @@ function CronjobsPanel({ initialUrl = '', onPrefillConsumed }: {
             type="url"
             value={url}
             onChange={e => setUrl(e.target.value)}
-            placeholder="https://floressolidarias.org/ramos"
+            placeholder="https://tutienda.com/productos"
             className={`${INPUT_CLS} ${url ? 'border-blue-500/50 ring-1 ring-blue-500/20' : ''}`}
             required
           />
@@ -491,7 +491,7 @@ function AlertsPanel() {
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            placeholder="marketing@floressolidarias.org"
+            placeholder="alertas@tutienda.com"
             className={INPUT_CLS}
             required
           />

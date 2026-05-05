@@ -13,9 +13,37 @@ export default defineConfig(async () => {
   const electronPlugins: Plugin[] = [];
   if (isElectron) {
     const { default: electron } = await import('vite-plugin-electron/simple');
+
     electronPlugins.push(
       electron({
-        main:    { entry: 'electron/main.ts' },
+        main: {
+          entry: 'electron/main.ts',
+          onstart(args) {
+            args.startup();
+          },
+          vite: {
+            build: {
+              sourcemap: false,
+              minify: false,
+              // No intentar bundlear: dejar todo como require() externo en CJS
+              // para que Node.js resuelva los módulos en runtime
+              lib: {
+                entry: 'electron/main.ts',
+                formats: ['es'],
+              },
+              rollupOptions: {
+                // Tratar TODOS los imports que no son rutas relativas como externos.
+                // Esto incluye: electron, express, cheerio, sqlite3, etc.
+                // El proceso main corre en Node.js real y los resuelve desde node_modules.
+                external: (id) => !id.startsWith('.') && !id.startsWith('/') && !/^[A-Za-z]:[/\\](?!.*node_modules)/.test(id),
+                output: {
+                  format: 'es',
+                  entryFileNames: '[name].mjs',
+                },
+              },
+            },
+          },
+        },
         preload: { input: 'electron/preload.ts' },
         renderer: {},
       })

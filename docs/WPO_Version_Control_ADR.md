@@ -51,3 +51,18 @@ Este documento funciona como Control de Versiones Transversal y Registro de Deci
 
 *   **Estado Base:** Lanzamientos 1 a 1 de manera manual. Desprotegido frente a recargas de _rate-limiting_.
 *   **Actual & Futuro (Feature V2.5):** Adopción escalonada en el nuevo módulo "Automations" del SPA, donde el usuario agenda los disparadores masivos. Protección Cero-DDoS impidiendo inyectar ráfagas de Peticiones LH hacia el objetivo de la auditoría.
+
+---
+
+## 🏗️ Feature: Migración a Desktop (V2.0.0)
+
+**Estado Base (Legado / V1): Arquitectura Dockerizada (Microservicios)**
+*   **Qué existía:** El sistema operaba bajo Docker Compose, requiriendo 4 contenedores (Node.js API, React Frontend, Redis, Puppeteer/Ubuntu). 
+*   **Problemas Causa:** Alta fricción para instalar en máquinas Windows de clientes/usuarios sin perfil técnico. La gestión de redes de Docker, permisos de lectura de volúmenes (SQLite) y uso de RAM de 3 servicios separados era ineficiente para un uso monopuesto.
+
+**Estado Actual (V2): Electron + Native Express + SQLite Local**
+*   **Decisión Arquitectónica:** Empaquetar todo el sistema en una única aplicación binaria `.exe` usando Electron.
+*   **Implementación y Mejoras:**
+    *   **Abandono de Redis/BullMQ:** Implementación de Node-cron en memoria para gestionar tareas en segundo plano.
+    *   **Chrome Launcher Nativo:** En lugar de aislar Puppeteer en un contenedor pesado de Ubuntu, Electron aprovecha la instalación local de Google Chrome del SO host, reduciendo drásticamente la huella de memoria.
+    *   **Aislamiento `%APPDATA%`:** La BD SQLite ya no vive en el repositorio ni depende de volúmenes Docker, garantizando una instalación multi-usuario estéril y privada.

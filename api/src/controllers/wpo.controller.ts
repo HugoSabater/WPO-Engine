@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import { QueueService } from '../services/queue.service';
 import { Database } from '../models/database';
 
 export class WPOController {
@@ -18,6 +17,7 @@ export class WPOController {
                 return;
             }
 
+            const { QueueService } = await import('../services/queue.service.js');
             const jobIds = await QueueService.addBatch(urls);
 
             res.status(202).json({

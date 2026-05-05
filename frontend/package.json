@@ -2,6 +2,8 @@
   "name": "wpo-engine-desktop",
   "private": true,
   "version": "2.0.0",
+  "description": "WPO Analytics Engine — WordPress & WooCommerce Performance Monitor",
+  "author": "floressolidarias.org",
   "type": "module",
   "main": "dist-electron/main.mjs",
   "scripts": {
@@ -10,43 +12,44 @@
     "preview": "vite preview",
     "electron:dev": "ELECTRON=true vite",
     "electron:build": "tsc && ELECTRON=true vite build && electron-builder",
-    "electron:preview": "electron ."
+    "electron:preview": "electron .",
+    "postinstall": "electron-builder install-app-deps",
+    "make:win": "cross-env ELECTRON=true CSC_IDENTITY_AUTO_DISCOVERY=false vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win"
   },
   "build": {
-    "appId": "org.floressolidarias.wpo-engine",
-    "productName": "WPO Analytics Engine",
+    "appId": "com.floressolidarias.wpoengine",
+    "productName": "WPO Engine",
     "directories": {
-      "output": "release"
+      "output": "C:\\WPO-Build\\release"
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/sqlite3/**/*"
     ],
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "public/icon.ico"
+      "target": "nsis",
+      "signingHashAlgorithms": null
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "public/icon.ico",
-      "uninstallerIcon": "public/icon.ico",
-      "shortcutName": "WPO Analytics Engine"
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.27",
+    "cross-env": "^7.0.3",
     "electron": "^36.2.1",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.3",

@@ -8,7 +8,7 @@
  *  - La DB se escribe vía la misma instancia compartida del proceso principal.
  */
 
-import chromeLauncher from 'chrome-launcher';
+import * as chromeLauncher from 'chrome-launcher';
 import lighthouse      from 'lighthouse';
 import path            from 'node:path';
 import sqlite3         from 'sqlite3';

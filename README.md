@@ -20,48 +20,39 @@ Las herramientas tradicionales de navegador proporcionan un rendimiento estátic
 - ♻️ **Controles In-Place:** Botones integrados para re-escanear URLs conservando su estrategia original o destruir registros (Clean-up), todo con un sistema interactivo de loading en vivo.
 - 📈 **Gráficas de Tendencia:** Evolución de los últimos 7 días con un algoritmo unificado (`Performance Score`) para visualización C-Level.
 
-## 3. Arquitectura e Infraestructura (Docker)
+## 3. Arquitectura e Infraestructura (Desktop)
 
-El ecosistema opera mediante una orquestación basada en microservicios, optimizada para ejecutarse en entornos humildes (VPS, Droplets de 2GB) sin fugas de memoria.
+El ecosistema opera como una **Aplicación Nativa de Escritorio** empaquetada con Electron, optimizada para ejecutarse localmente sin configuraciones de red o dependencias externas.
 
-| Contenedor          | Rol Arquitectónico                   | Core Tech Stack                               |
+| Componente          | Rol Arquitectónico                   | Core Tech Stack                               |
 | :------------------ | :----------------------------------- | :-------------------------------------------- |
-| `frontend`          | UI Contextual de React               | React, Vite, Tailwind CSS (Dark-Charcoal)     |
-| `api-orchestrator`  | API REST & Cola de Tareas (Producer) | Node.js, Express (CORS/GZIP), BullMQ, SQLite  |
-| `lighthouse-worker` | Consumidor asíncrono y Render        | Ubuntu, Puppeteer Headless, Google Lighthouse |
-| `redis-queue`       | Message Broker en Memoria RAM        | Redis 7 Alpine                                |
+| **Electron Main**   | Orquestador y Servidor Local         | Node.js, Express (CORS/GZIP), SQLite, Cron    |
+| **Electron UI**     | Interfaz de Usuario SPA              | React, Vite, Tailwind CSS (Dark-Charcoal)     |
+| **Motor de Análisis**| Ejecución de Auditorías              | `chrome-launcher`, Google Lighthouse          |
+| **Web Crawler**     | Rastreo en lote (Batch Audit)        | `cheerio`, `node-fetch`                       |
 
 ## 📚 Documentación Oficial y Arquitectura
 
-Dado el salto a la arquitectura Single Page Application (SPA), recomendamos encarecidamente consultar nuestros registros de control y manuales técnicos nativos antes de operar o modificar la infraestructura:
+Para entender la evolución y arquitectura de esta herramienta, consulta la siguiente documentación actualizada:
 
-- **[Histórico de Versiones y Decisiones (ADR)](./docs/WPO_Version_Control_ADR.md)**: Documento retrospectivo para entender el "antes vs ahora" (Migración de Monolito a SPA, Destrucción de payload Base64).
-- **[Manual Arquitectónico y Operativo](./docs/WPO_Architecture_And_Operation_Manual.md)**: El manual de uso interactivo para entender el enrutamiento TopBar, el HUD Polling continuo y buenas prácticas de ejecución.
-- **[Backend Architecture](./docs/WPO_Backend_Architecture.md)** y **[Roadmap por Sprints](./docs/WPO_Roadmap.md)**: Planificaciones maestras y mitigaciones de fallas críticas.
+- **[Notas de Lanzamiento V2.0.0 (Desktop Edition)](./docs/RELEASE_V2.md)**: El manual de distribución, arquitectura actual e instrucciones de despliegue para compartir el `.exe`.
+- **[Histórico de Versiones y Decisiones (ADR)](./docs/WPO_Version_Control_ADR.md)**: Documento retrospectivo para entender el "antes vs ahora" (Migración de Docker a Electron, SPA).
+- **[Reporte Analítico WPO](./docs/WPO_Analysis_Report.md)**: Fundamentos teóricos sobre la variabilidad de red en Lighthouse y la estrategia de mitigación.
+
+*(Nota: Los archivos antiguos de hojas de ruta de Sprints o manuales de Docker han quedado obsoletos y han sido purgados de este repositorio para mantener la pureza de la rama).*
 
 ---
 
 ## 4. Diseño Técnico y Optimizaciones Avanzadas
 
-### 4.1 Patrón Productor-Consumidor (BullMQ)
+### 4.1 Aislamiento de Base de Datos (Seguridad de Datos)
 
-El análisis DOM de Lighthouse (emulando red 4G y throttling de CPU) asfixia y bloquea servidores web. La arquitectura implementa un orquestador que **encola URIs en Redis (Producer)** y libera la solicitud devolviendo un `202 Accepted`. El **Worker aislado (Consumer)** atrapa la tarea, lanza Google Chrome (Puppeteer), genera la telemetría y escribe en disco.
+El motor SQLite ya no se distribuye dentro del código ni requiere de persistencia en contenedores. El archivo de base de datos se despliega automáticamente en la carpeta `%APPDATA%` (Windows) del perfil del usuario, garantizando privacidad absoluta de los reportes.
 
-### 4.2 Optimización Extrema del Worker (Puppeteer)
+### 4.2 Optimización de Chromium y Lighthouse
 
-Levantar instancias de Chromium es devastador para la memoria RAM. El worker está blindado con:
+Levantar instancias de Chromium es devastador para la memoria RAM. El auditor está blindado utilizando `chrome-launcher`, que detecta automáticamente tu versión nativa de Google Chrome instalada en tu sistema. Esto evita descargar pesados binarios portátiles y elimina riesgos de `Out Of Memory` al usar el SO directamente.
 
-- Bloqueo de concurrencia a nivel de configuración.
-- Flags en tiempo de ejecución: `--disable-dev-shm-usage`, `--disable-gpu`, `--single-process`, `--no-zygote`. Previniendo los temidos cuelgues `Aw, Snap!` y fugas masivas de hilos (Zombie Processes).
-- La imagen Docker evita descargar y compilar binarios pesados iterativamente, utilizando una imagen maestra con Chrome pre-empacado y controlada mediante variables de entorno `PUPPETEER_SKIP_DOWNLOAD`.
+### 4.3 Crawler Nativo Integrado
 
-### 4.3 Persistencia y Compresión GZIP
-
-- **SQLite en Modo WAL:** Habilita el `Write-Ahead Logging`, lo que previene por diseño el bloqueo colisional transaccional (`SQLITE_BUSY`). La DB permite al React Frontend leer cientos de historiales y gráficas concurrentemente mientras el Worker escribe auditorías completas.
-- **Storage Layer Optimization:** La API integra Middleware Compression (GZIP/Deflate) y sirve eficientemente las imágenes persistidas en el volumen mapeado SSD a través de rutas estáticas, erradicando inyecciones Base64 de 18MB directas. Esto asegura un TTFB relámpago en el Dashboard evitando OOMs.
-
-### 4.4 Arquitectura Frontend React
-
-- Peticiones eficientes consolidadas vía `Promise.all` para hidratar la UI de golpe sin _Waterfalls_.
-- `useMemo` avanzado para la clasificación polinómica de Clústeres de sub-carpetas de URL.
-- Component-Driven con Tailwind CSS en un UI fuertemente estandarizado y responsivo.
+Hemos superado las limitaciones de lanzar URL por URL implementando un endpoint embebido con `cheerio` que navega el DOM y auto-descubre URLs internas en masa. Combinado con un encolador asíncrono y los Crons Nativos de Node.js, las auditorías fluyen solas sin bloquear la interfaz.

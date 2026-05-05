@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchAllMetrics, enqueueAudit } from '../services/api';
+import { fetchAllMetrics, enqueueAudit, API_URL } from '../services/api';
 import type { MetricRow } from '../types';
 
 // ─── API Crawler ──────────────────────────────────────────────────────────────
 async function crawlUrl(url: string, limit: number): Promise<string[]> {
-  const res = await fetch(`/api/crawl?url=${encodeURIComponent(url)}&limit=${limit}`);
+  const res = await fetch(`${API_URL}/api/crawl?url=${encodeURIComponent(url)}&limit=${limit}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Error ${res.status} al rastrear`);
@@ -14,7 +14,7 @@ async function crawlUrl(url: string, limit: number): Promise<string[]> {
 }
 
 async function enqueueBatch(urls: string[]): Promise<void> {
-  const res = await fetch('/api/audit/batch', {
+  const res = await fetch(`${API_URL}/api/audit/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ urls }),
@@ -454,7 +454,7 @@ export default function SiteExplorerView({
                   type="url"
                   value={crawlUrl_}
                   onChange={e => setCrawlUrl_(e.target.value)}
-                  placeholder="https://example.com"
+                  placeholder="https://tutienda.com"
                   className="w-full pl-9 pr-3 py-2 text-xs bg-charcoal-800 border border-charcoal-700/60 rounded-lg
                     text-charcoal-200 placeholder-charcoal-600
                     focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30 transition-colors"
