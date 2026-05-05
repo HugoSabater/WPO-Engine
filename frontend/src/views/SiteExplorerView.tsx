@@ -107,7 +107,12 @@ function CardSkeleton() {
 }
 
 // ─── Tarjeta de Sitio ─────────────────────────────────────────────────────────
-function SiteCardComponent({ card, onRescan }: { card: SiteCard; onRescan: (url: string, strategy: string) => void }) {
+function SiteCardComponent({ card, onRescan, onViewReport, onViewDashboard }: {
+  card:              SiteCard;
+  onRescan:          (url: string, strategy: string) => void;
+  onViewReport?:     (url: string, strategy: string) => void;
+  onViewDashboard?:  (row: MetricRow) => void;
+}) {
   const { latest, scoreHistory, hasBaseline } = card;
   const score   = latest.score ?? 0;
   const device  = latest.strategy ?? 'mobile';
@@ -188,8 +193,9 @@ function SiteCardComponent({ card, onRescan }: { card: SiteCard; onRescan: (url:
         </div>
       </div>
 
-      {/* Footer: Re-escanear */}
-      <div className="flex items-center justify-between pt-1 border-t border-charcoal-800/60">
+      {/* Footer: acciones rápidas */}
+      <div className="flex items-center justify-between pt-1 border-t border-charcoal-800/60 gap-1">
+        {/* Abrir URL externa */}
         <a
           href={card.url} target="_blank" rel="noopener noreferrer"
           className="text-[10px] text-charcoal-600 hover:text-blue-400 transition-colors flex items-center gap-1"
@@ -199,37 +205,81 @@ function SiteCardComponent({ card, onRescan }: { card: SiteCard; onRescan: (url:
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
               d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
           </svg>
-          Abrir URL
         </a>
-        <button
-          onClick={() => onRescan(card.url, device)}
-          className="flex items-center gap-1.5 text-[10px] font-medium text-charcoal-400
-            hover:text-charcoal-100 hover:bg-charcoal-700/60 px-2.5 py-1.5 rounded-lg transition-colors"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-          </svg>
-          Re-escanear
-        </button>
+
+        <div className="flex items-center gap-1 ml-auto">
+          {/* Ver Reporte */}
+          {onViewReport && (
+            <button
+              onClick={() => onViewReport(card.url, device)}
+              title="Ver en Reportes"
+              className="flex items-center gap-1 text-[10px] font-medium text-charcoal-500
+                hover:text-emerald-400 hover:bg-emerald-500/10 px-2 py-1 rounded-lg transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              Reporte
+            </button>
+          )}
+
+          {/* Ver Análisis en Dashboard */}
+          {onViewDashboard && (
+            <button
+              onClick={() => onViewDashboard(latest)}
+              title="Ver análisis en Dashboard"
+              className="flex items-center gap-1 text-[10px] font-medium text-charcoal-500
+                hover:text-blue-400 hover:bg-blue-500/10 px-2 py-1 rounded-lg transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+              Análisis
+            </button>
+          )}
+
+          {/* Re-escanear */}
+          <button
+            onClick={() => onRescan(card.url, device)}
+            title="Re-escanear"
+            className="flex items-center gap-1 text-[10px] font-medium text-charcoal-500
+              hover:text-charcoal-100 hover:bg-charcoal-700/60 px-2 py-1 rounded-lg transition-colors"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Rescan
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── Vista Principal ──────────────────────────────────────────────────────────
-type SortMode = 'score_asc' | 'score_desc' | 'date_desc' | 'url_asc';
+type SortMode    = 'score_asc' | 'score_desc' | 'date_desc' | 'url_asc';
 type DeviceFilter = 'all' | 'mobile' | 'desktop';
+type ScoreFilter  = 'all' | 'critical' | 'improvable' | 'optimal';
 
-export default function SiteExplorerView() {
-  const [rows,    setRows]    = useState<MetricRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
-  const [search,  setSearch]  = useState('');
-  const [sort,    setSort]    = useState<SortMode>('score_asc');
-  const [device,  setDevice]  = useState<DeviceFilter>('all');
+export default function SiteExplorerView({
+  onNavigateToReports,
+  onNavigateToDashboard,
+}: {
+  onNavigateToReports?:   (url: string, strategy: string) => void;
+  onNavigateToDashboard?: (row: MetricRow) => void;
+}) {
+  const [rows,        setRows]        = useState<MetricRow[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
+  const [search,      setSearch]      = useState('');
+  const [sort,        setSort]        = useState<SortMode>('score_asc');
+  const [device,      setDevice]      = useState<DeviceFilter>('all');
+  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>('all');
   const [rescanningUrl, setRescanningUrl] = useState<string | null>(null);
-  const [rescanMsg, setRescanMsg] = useState<string | null>(null);
+  const [rescanMsg,     setRescanMsg]     = useState<string | null>(null);
 
   // ── Crawler state ─────────────────────────────────────────────────────────
   const [crawlEnabled,  setCrawlEnabled]  = useState(false);
@@ -293,6 +343,10 @@ export default function SiteExplorerView() {
     let list = cards.filter(c => {
       if (device !== 'all' && c.latest.strategy !== device) return false;
       if (search && !c.url.toLowerCase().includes(search.toLowerCase())) return false;
+      const s = c.latest.score ?? 0;
+      if (scoreFilter === 'critical'   && s >= 50)         return false;
+      if (scoreFilter === 'improvable' && (s < 50 || s >= 90)) return false;
+      if (scoreFilter === 'optimal'    && s < 90)          return false;
       return true;
     });
     switch (sort) {
@@ -302,7 +356,7 @@ export default function SiteExplorerView() {
       case 'url_asc':    list.sort((a, b) => a.url.localeCompare(b.url)); break;
     }
     return list;
-  }, [cards, search, sort, device]);
+  }, [cards, search, sort, device, scoreFilter]);
 
   // ── Re-escaneo ────────────────────────────────────────────────────────────
   const handleRescan = async (url: string, strategy: string) => {
@@ -468,19 +522,32 @@ export default function SiteExplorerView() {
         </div>
       )}
 
-      {/* ── Stats rápidas ── */}
+      {/* ── Stats rápidas (clicables: filtran por categoría) ── */}
       {!loading && !error && stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'URLs monitoreadas', value: stats.total, color: 'text-charcoal-200' },
-            { label: 'Score promedio',    value: stats.avg,   color: scoreColor(stats.avg) },
-            { label: 'En buen estado',    value: stats.ok,    color: 'text-emerald-400' },
-            { label: 'Estado crítico',    value: stats.crit,  color: stats.crit > 0 ? 'text-red-400' : 'text-charcoal-500' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="rounded-xl bg-charcoal-900/60 border border-charcoal-800/60 px-4 py-3">
+          {([
+            { label: 'URLs monitoreadas', value: stats.total, color: 'text-charcoal-200', filter: 'all'       as ScoreFilter, active: scoreFilter === 'all' },
+            { label: 'Score promedio',    value: stats.avg,   color: scoreColor(stats.avg), filter: 'all'     as ScoreFilter, active: false },
+            { label: 'Buen score (≥90)',  value: stats.ok,    color: 'text-emerald-400', filter: 'optimal'   as ScoreFilter, active: scoreFilter === 'optimal' },
+            { label: 'Score crítico (<50)',value: stats.crit,  color: stats.crit > 0 ? 'text-red-400' : 'text-charcoal-500', filter: 'critical' as ScoreFilter, active: scoreFilter === 'critical' },
+          ] as const).map(({ label, value, color, filter, active }) => (
+            <button
+              key={label}
+              onClick={() => setScoreFilter(prev => prev === filter ? 'all' : filter)}
+              className={`rounded-xl px-4 py-3 text-left transition-all duration-150 border
+                ${ active
+                  ? 'bg-charcoal-700/60 border-charcoal-600/60 shadow-sm ring-1 ring-charcoal-600/30'
+                  : 'bg-charcoal-900/60 border-charcoal-800/60 hover:border-charcoal-700/60 hover:bg-charcoal-800/40'
+                }`}
+            >
               <p className="text-[10px] text-charcoal-500 uppercase tracking-widest mb-1">{label}</p>
               <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
-            </div>
+              {filter !== 'all' && (
+                <p className="text-[9px] text-charcoal-600 mt-1">
+                  {active ? '✓ Filtro activo — clic para quitar' : 'Clic para filtrar'}
+                </p>
+              )}
+            </button>
           ))}
         </div>
       )}
@@ -587,6 +654,8 @@ export default function SiteExplorerView() {
               key={card.url}
               card={card}
               onRescan={handleRescan}
+              onViewReport={onNavigateToReports}
+              onViewDashboard={onNavigateToDashboard}
             />
           ))}
         </div>

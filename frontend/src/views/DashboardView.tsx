@@ -4,7 +4,7 @@ import DataTable from '../components/DataTable';
 import SlideOverPanel from '../components/SlideOverPanel';
 import AnalyzerInput from '../components/AnalyzerInput';
 import type { MetricRow, PriorityInsight, ChartDataPoint } from '../types';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { getLatestPerSite, filterByDays, buildPriorityInsights } from '../services/api';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -17,6 +17,8 @@ interface DashboardViewProps {
   loading: boolean;
   onRefreshRequested: () => void;
   onAnalysisEnqueued: () => void;
+  initialRow?:              MetricRow | null;
+  onInitialRowConsumed?:    () => void;
 }
 
 // ─── Selector de modo de vista ────────────────────────────────────────────────
@@ -54,9 +56,19 @@ export default function DashboardView({
   loading,
   onRefreshRequested,
   onAnalysisEnqueued,
+  initialRow,
+  onInitialRowConsumed,
 }: DashboardViewProps) {
-  const [activeRow, setActiveRow] = useState<MetricRow | null>(null);
+  const [activeRow, setActiveRow] = useState<MetricRow | null>(initialRow ?? null);
   const [viewMode,  setViewMode]  = useState<ViewMode>('current');
+
+  // Abrir SlideOver si llegamos desde SiteExplorer con una fila pre-seleccionada
+  useEffect(() => {
+    if (!initialRow) return;
+    setActiveRow(initialRow);
+    onInitialRowConsumed?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRow]);
 
   const handleRowClick = useCallback((row: MetricRow) => {
     setActiveRow(prev => prev?.id === row.id ? null : row);

@@ -78,8 +78,10 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 // ─── Vista Principal ──────────────────────────────────────────────────────────
-export default function ReportsView({ onCreateAutomation }: {
+export default function ReportsView({ onCreateAutomation, prefillReport, onPrefillConsumed }: {
   onCreateAutomation?: (url: string) => void;
+  prefillReport?:      { url: string; strategy: string } | null;
+  onPrefillConsumed?:  () => void;
 }) {
   const [rows,    setRows]    = useState<MetricRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +111,15 @@ export default function ReportsView({ onCreateAutomation }: {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Aplicar prefill desde SiteExplorer (url + strategy como filtros)
+  useEffect(() => {
+    if (!prefillReport) return;
+    setSearch(prefillReport.url);
+    setDevice(prefillReport.strategy as DeviceFilter);
+    onPrefillConsumed?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillReport]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');

@@ -88,59 +88,65 @@ function QueueHUD({ status }: { status: QueueStatus }) {
 // ─── TopBar Principal ─────────────────────────────────────────────────────────
 export default function TopBar({ activeView, setActiveView, queueStatus }: TopBarProps) {
   return (
-    <header className="border-b border-charcoal-800 bg-charcoal-950/90 backdrop-blur-md sticky top-0 z-50">
-      {/* Fila superior: Logo + HUD + Fecha */}
-      <div className="max-w-screen-2xl mx-auto px-6 pt-3 pb-0 flex items-center justify-between">
-        {/* Logo */}
+    <header className="border-b border-charcoal-800/80 bg-charcoal-950/95 backdrop-blur-md sticky top-0 z-50">
+      <div className="max-w-screen-2xl mx-auto px-6 h-14 grid grid-cols-3 items-center gap-4">
+
+        {/* ── Columna izquierda: Logo ── */}
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-600/30">
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
           <div>
-            <h1 className="text-sm font-semibold text-charcoal-100 leading-tight">WPO Analytics Engine</h1>
-            <p className="text-[10px] text-charcoal-500 leading-tight">WordPress / WooCommerce Performance Monitor</p>
+            <h1 className="text-sm font-semibold text-charcoal-100 leading-tight tracking-tight">
+              WPO Analytics Engine
+            </h1>
+            <p className="text-[10px] text-charcoal-500 leading-tight hidden sm:block">
+              WordPress / WooCommerce
+            </p>
           </div>
         </div>
 
-        {/* Zona derecha: HUD global + fecha */}
-        <div className="flex items-center gap-4">
+        {/* ── Columna central: Navegación ── */}
+        <nav className="flex items-center justify-center">
+          <ul className="flex items-center gap-0.5 p-0.5 rounded-xl bg-charcoal-900/60 border border-charcoal-800/60">
+            {NAV_ITEMS.map(({ id, label, icon }) => {
+              const isActive = activeView === id;
+              return (
+                <li key={id}>
+                  <button
+                    onClick={() => setActiveView(id)}
+                    className={`
+                      flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium
+                      transition-all duration-150 whitespace-nowrap
+                      ${isActive
+                        ? 'bg-charcoal-700 text-charcoal-100 shadow-sm'
+                        : 'text-charcoal-500 hover:text-charcoal-300 hover:bg-charcoal-800/60'
+                      }
+                    `}
+                  >
+                    <span className={isActive ? 'text-yellow-300' : 'text-charcoal-600'}>
+                      {icon}
+                    </span>
+                    {label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* ── Columna derecha: HUD de cola ── */}
+        <div className="flex items-center justify-end gap-3">
           <QueueHUD status={queueStatus} />
-          <span className="text-xs text-charcoal-500 hidden md:block">
-            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+          <span className="text-[10px] text-charcoal-600 hidden lg:block border-l border-charcoal-800 pl-3">
+            {new Date().toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
           </span>
         </div>
-      </div>
 
-      {/* Fila de navegación (subrayado activo con amarillo pálido) */}
-      <nav className="max-w-screen-2xl mx-auto px-6">
-        <ul className="flex items-center gap-1 -mb-px">
-          {NAV_ITEMS.map(({ id, label, icon }) => {
-            const isActive = activeView === id;
-            return (
-              <li key={id}>
-                <button
-                  onClick={() => setActiveView(id)}
-                  className={`
-                    flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150
-                    ${isActive
-                      ? 'border-yellow-200 text-white'
-                      : 'border-transparent text-charcoal-400 hover:text-charcoal-200 hover:border-charcoal-600'
-                    }
-                  `}
-                >
-                  <span className={isActive ? 'text-yellow-200' : 'text-charcoal-500'}>
-                    {icon}
-                  </span>
-                  {label}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      </div>
     </header>
   );
 }

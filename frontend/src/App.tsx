@@ -41,6 +41,12 @@ export default function App() {
   // ── Prefill de URL para AutomationsView (desde Reports → Automations) ────────
   const [prefillUrl, setPrefillUrl] = useState<string>('');
 
+  // ── Navegación contextual SiteExplorer → Reports (url + strategy) ──────────
+  const [prefillReport, setPrefillReport] = useState<{ url: string; strategy: string } | null>(null);
+
+  // ── Row seleccionado para abrir SlideOver en Dashboard (desde SiteExplorer) ───
+  const [dashboardRow, setDashboardRow] = useState<import('./types').MetricRow | null>(null);
+
   // ── Datos globales del Dashboard ───────────────────────────────────────────
   const [metrics,   setMetrics]   = useState<MetricRow[]>([]);
   const [insights,  setInsights]  = useState<PriorityInsight[]>([]);
@@ -114,6 +120,18 @@ export default function App() {
     setActiveView('automations');
   }, []);
 
+  // ── Navegación contextual: SiteExplorer → Reports (prefill url + estrategia) ─
+  const navigateToReports = useCallback((url: string, strategy: string) => {
+    setPrefillReport({ url, strategy });
+    setActiveView('reports');
+  }, []);
+
+  // ── Navegación contextual: SiteExplorer → Dashboard (abrir SlideOver) ───────
+  const navigateToDashboardRow = useCallback((row: import('./types').MetricRow) => {
+    setDashboardRow(row);
+    setActiveView('dashboard');
+  }, []);
+
   // ── Sincronización URL bidireccional ───────────────────────────────────────
   // Cuando cambia la vista activa → actualizar URL (para bookmarks / compartir)
   useEffect(() => {
@@ -142,14 +160,27 @@ export default function App() {
             loading={loading}
             onRefreshRequested={() => loadData(true)}
             onAnalysisEnqueued={handleAnalysisEnqueued}
+            initialRow={dashboardRow}
+            onInitialRowConsumed={() => setDashboardRow(null)}
           />
         );
       case 'explorer':
-        return <SiteExplorerView />;
+        return (
+          <SiteExplorerView
+            onNavigateToReports={navigateToReports}
+            onNavigateToDashboard={navigateToDashboardRow}
+          />
+        );
       case 'automations':
         return <AutomationsView prefillUrl={prefillUrl} onPrefillConsumed={() => setPrefillUrl('')} />;
       case 'reports':
-        return <ReportsView onCreateAutomation={navigateToAutomations} />;
+        return (
+          <ReportsView
+            onCreateAutomation={navigateToAutomations}
+            prefillReport={prefillReport}
+            onPrefillConsumed={() => setPrefillReport(null)}
+          />
+        );
     }
   };
 
