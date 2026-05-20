@@ -1,69 +1,79 @@
-# Reporte Analítico y Estrategia de Plataforma WPO Interna
+# Análisis de Mercado WPO — Fundamentos y Posicionamiento
 
-A partir del análisis de las principales soluciones WPO del mercado (Lighthouse CI, GTmetrix, SpeedCurve, WebPageTest), hemos identificado deficiencias críticas en la evaluación de sitios complejos construidos en **WordPress / WooCommerce**.
-
-A continuación se detalla cómo gestionan el ruido estas herramientas, sus cuellos de botella y nuestro **Plan de Arquitectura Interna** basado en contenedores Docker para explotar estos _gaps_.
+> Este documento recoge el análisis técnico comparativo de las principales herramientas del mercado WPO que motivó el diseño del motor de auditoría propio. Es un documento de referencia estratégica, no de implementación.
 
 ---
 
-## 1. Análisis de Mercado: Gestión de Fluctuación y Variabilidad de Red
+## 1. Herramientas analizadas y su metodología de throttling
 
-- **WebPageTest (WPT):** Estándar de la industria. Usa _Packet-Level Throttling_ a nivel operativo (dummynet/netem) mitigando fluctuaciones de protocolo. Es preciso, pero costoso de escalar.
-- **Lighthouse CI (LHCI):** Utiliza _Simulated Throttling_ (Motor Lantern) calculando algorítmicamente el rendimiento basado en una carga rápida. Mitiga ruido ejecutando secuencias y extrayendo la mediana (P50/P75).
-- **GTmetrix:** Aplica latencia simulada desde el Protocolo de Chrome (CDP). No frena a nivel de hardware, sino a nivel de petición, obviando los cuellos de TCP/SSL.
-- **SpeedCurve:** Emplea agentes distribuidos en AWS (EC2) y mitiga varianzas forzando pruebas impares y detectando anomalías, pero es muy sensible al ruido de computación en la nube compartida.
+La principal fuente de variabilidad en las métricas Lighthouse es cómo cada herramienta simula las condiciones de red y CPU del usuario final. No todas las herramientas utilizan el mismo método, lo que hace que los resultados no sean directamente comparables entre plataformas.
 
-## 2. Cuellos de Botella Técnicos en Ejecuciones Masivas (50+ URLs)
-
-- **Contención de Recursos:** LHCI escalar con _headless Chrome_ paralelo satura CPU/RAM, provocando ruidos autoinducidos severos en los servidores de CI (afectados por Hyperthreading).
-- **Rate-Limits y Cuotas:** Enfoques SaaS como GTmetrix/SpeedCurve poseen estricta concurrencia artificial, forzando a reintentos complejos o agotar costosas licencias premium.
-- **Firewalls / Entornos Privados:** WAFs bloquean IPs de estas granjas WPO en entornos locales / _staging_. Además, GTmetrix interrumpe forzosamente peticiones a los 2 minutos, un desastre para cargas asíncronas persistentes.
+| Herramienta | Método de throttling | Nivel de precisión | Limitación principal |
+|-------------|---------------------|-------------------|---------------------|
+| **WebPageTest** | Packet-Level (`dummynet`/`netem`) a nivel de kernel | ★★★★★ Máximo | Costoso de escalar; requiere infraestructura dedicada |
+| **Lighthouse CI** | Simulated Throttling (motor Lantern) — cálculo algorítmico | ★★★☆☆ Medio | Falsos positivos con lazy-loading agresivo o galerías JS pesadas |
+| **GTmetrix** | Latencia simulada vía Chrome DevTools Protocol (CDP) | ★★★☆☆ Medio | No frena a nivel de hardware; obvia cuellos TCP/SSL |
+| **SpeedCurve** | Agentes distribuidos en AWS EC2 | ★★★★☆ Alto | Sensible al ruido de computación en nube compartida |
 
 ---
 
-## 3. Identificación de "Gaps" (Oportunidad para Herramienta Interna)
+## 2. Cuellos de botella en entornos WordPress/WooCommerce
 
-Estos tres vados técnicos son nuestro punto de ataque estratégico para un **entorno WooCommerce**:
+Las herramientas SaaS presentan limitaciones específicas cuando se auditan sitios WordPress complejos:
 
-1.  **GAP 1: Imposibilidad de Aislamiento y Throttling Real en Local.**  
-    WPT exige puentes de red físicos para probar un localhost.  
-    _Táctica DAW:_ Usaremos contenedores Docker asilados implementando `netem` a nivel de _namespace_ de red. Sin interferencias, podemos someter al entorno WooCommerce a limitación de paquetes real.
+### 2.1 Heartbeats y peticiones de fondo de WordPress
 
-2.  **GAP 2: Falsos Positivos LCP (Motor Lantern).**  
-    Simular cargas falla ante _lazy-loading_ agresivo o galerías JS pesadas.  
-    _Táctica DAW:_ Descartar algoritmos de simulación; mediremos renderizados directos y reales con Puppeteer controlando latencias nativas del SO dentro del contenedor.
+WordPress genera peticiones periódicas a `admin-ajax.php` (Heartbeat API) durante la carga de página. Estas peticiones son ajenas al ciclo vital de renderizado pero interfieren con el criterio "Network Idle" de Lighthouse, provocando timeouts o mediciones infladas en herramientas que no las filtran.
 
-3.  **GAP 3: Fragilidad por "Network Idle" en Tareas WP Segundo Plano.**  
-    Heartbeats (`admin-ajax.php`) o píxeles infinitos rompen LHCI o GTmetrix provocando "Timeouts".  
-    _Táctica DAW:_ Forzar lógicas de terminación (`page.evaluate`) que descarten peticiones ajenas al ciclo vital de renderizado. Aplicaremos métricas mediante el "Percentil 75" para depurar resultados deficientes y no invalidar todo el lote.
+### 2.2 Rate-limits en auditorías masivas
+
+Las plataformas SaaS imponen concurrencia artificial. Auditar 50+ URLs requiere reintentos complejos o consumir licencias premium que encarecen el proceso para equipos con muchos sitios bajo gestión.
+
+### 2.3 Bloqueo por WAF en entornos de staging
+
+Los WAFs (Web Application Firewall) de WooCommerce frecuentemente bloquean las IPs de las granjas de servidores de GTmetrix y similares. Esto hace imposible auditar entornos privados o de preproducción sin configurar excepciones de seguridad.
+
+### 2.4 Timeout en cargas asíncronas persistentes
+
+GTmetrix interrumpe forzosamente las peticiones a los 2 minutos. Algunas arquitecturas WooCommerce con plugins de filtrado (JetSmartFilters, FacetWP) generan peticiones AJAX que superan este límite.
 
 ---
 
-## 4. Plan de Arquitectura y Estructura DAW Docker
+## 3. Por qué un motor propio
 
-Para ejecutar esta plataforma propia en las herramientas de nuestro Centro de Mando, procedemos a plantear la infraestructura:
+El motor de WPO Analytics Engine resuelve los tres problemas anteriores en el contexto específico de tiendas WordPress/WooCommerce gestionadas internamente:
 
-### Estructura de Carpetas
+**GAP 1 — Imposibilidad de auditar entornos privados**
+Al ejecutarse localmente en la máquina del auditor, el motor puede alcanzar entornos de staging protegidos por VPN o autenticación HTTP básica sin configuraciones adicionales.
 
-```text
-c:.../tools/wpo-engine/
-├── api/                        # API Orchestrator (Node.js/Express)
-│   └── src/                    # Orquestación de auditorías y BullMQ
-├── worker/                     # Lighthouse Runner (Puppeteer Service)
-│   └── src/                    # Motor de ejecución y captura LCP
-├── frontend/                   # Dashboard (React/Vite/Tailwind)
-├── docs/                       # Documentación Técnica y Reportes
-├── docker-compose.yml          # Orquestación de Microservicios
-├── .gitignore                  # Reglas de exclusión (Node/DB/Env)
-├── README.md                   # Manual de usuario y arquitectura
-└── LICENSE                     # MIT License
-```
+**GAP 2 — Falsos positivos por Simulated Throttling**
+El motor ejecuta Chrome real con throttling de CPU y red configurado vía flags de `chrome-launcher`, midiendo el renderizado real en lugar de calcularlo algorítmicamente.
 
-### Componentes y Lógica Implementada
+**GAP 3 — Falta de trazabilidad histórica**
+Las herramientas SaaS ofrecen snapshots puntuales. Este motor persiste cada auditoría en SQLite y permite comparar contra una baseline marcada por el usuario, detectando regresiones introducidas por actualizaciones de plugins.
 
-1.  **Orquestador de Nodos (Docker Runner con `tc/netem`):**
-    - **Lógica:** Crear una imagen base con capacidad de controlar su propio tráfico de red (`iproute2`). El script Puppeteer desactivará cualquier _simulated throttling_ y usaremos la red real degradada del contenedor para atacar el frontend local de la app real WordPress.
-2.  **Gestor de Colas y Tolerancia a Fallos (Backend Node.js):**
-    - **Lógica:** Exponer una API que reciba listas masivas (50 URLs). Introducirlas en `BullMQ` (Redis). Cada Job levantará instancias controladas, monitorizando timeouts, descartando peticiones esporádicas de WP (ajax) de los _Network Idles_, y agrupando las respuestas (10 iteraciones por URL).
-3.  **Filtrado Matemático y Dashboard:**
-    - **Lógica:** Aplicar una desviación y obtener el _Percentil 75 (P75)_, descartando el ruido sistemático de hardware o hiperhilos. El Dashboard mostrará la métrica fidedigna junto a las recomendaciones sugeridas por el contenedor de Inteligencia Artificial (basado en reglas de buenas prácticas WPO).
+---
+
+## 4. Estrategia de mitigación de ruido
+
+Para obtener métricas estables en entornos WordPress, el motor aplica las siguientes decisiones de diseño:
+
+- **Concurrencia máxima 1:** Una sola instancia de Chrome activa en cada momento. Elimina el ruido autoinducido por hyperthreading cuando se corren múltiples instancias en paralelo.
+- **`onlyCategories: ['performance']`:** Solo se ejecutan las auditorías de rendimiento de Lighthouse. Las categorías de accesibilidad, SEO y best-practices se omiten para reducir el tiempo de ejecución y el consumo de memoria.
+- **Flags de Chrome antiruido:** `--headless=new`, `--disable-dev-shm-usage`, `--disable-gpu` — impiden condiciones de carrera en sistemas con recursos limitados.
+- **Scoring basado en umbrales discretos (cliente):** En lugar de usar el scoring numérico interno de Lighthouse (que varía entre ejecuciones), el motor aplica una heurística propia basada en los umbrales "Good/Needs Improvement/Poor" publicados por Google para Core Web Vitals. Esto hace los resultados más estables y explicables para audiencias no técnicas.
+
+---
+
+## 5. Umbrales de Core Web Vitals de referencia
+
+Los umbrales utilizados en el motor están alineados con los publicados por Google para la iniciativa [Core Web Vitals](https://web.dev/vitals/):
+
+| Métrica | Bueno | Necesita mejora | Pobre |
+|---------|-------|----------------|-------|
+| LCP (Largest Contentful Paint) | < 2.5 s | 2.5–4 s | > 4 s |
+| TBT (Total Blocking Time) | < 300 ms | 300–600 ms | > 600 ms |
+| CLS (Cumulative Layout Shift) | < 0.1 | 0.1–0.25 | > 0.25 |
+| TTFB (Time To First Byte) | < 800 ms | 800–1800 ms | > 1800 ms |
+
+> **Nota sobre el scoring del motor:** La heurística de puntuación (0-100) del motor es una aproximación simplificada a los umbrales anteriores, no una replicación exacta del algoritmo de Lighthouse. Ver [`docs/technical/dashboard.md`](./technical/dashboard.md#heurística-de-scoring-cliente) para la fórmula exacta.

@@ -1,73 +1,81 @@
-# WPO Analytics Engine v2.0.0 🚀
-**The Desktop Edition (Electron + Vite + Express + SQLite)**
+# WPO Analytics Engine v2.0.0 — Notas de Lanzamiento
 
-Bienvenido a la versión definitiva del WPO Analytics Engine. Hemos evolucionado la arquitectura original basada en contenedores Docker hacia una **aplicación nativa de escritorio independiente y distribuible**, manteniendo toda la potencia del motor Lighthouse y la interfaz moderna de React.
-
----
-
-## 🎯 Resumen de la Nueva Versión
-
-El gran hito de la versión 2.0.0 es la consolidación del clúster de microservicios (Frontend, Backend, y Redis/Cola) en un único empaquetado **.exe** capaz de correr de manera local sin necesidad de configuraciones de red, contenedores o herramientas de línea de comandos.
-
-### Características Principales:
-1. **Lighthouse Integrado**: Sustitución de `puppeteer` por `chrome-launcher` para usar la instalación nativa de Chrome del sistema, reduciendo el consumo de memoria drásticamente.
-2. **Web Crawler Integrado**: Rastreo de enlaces internos automáticos mediante un motor basado en `cheerio` para auditorías en lote directas.
-3. **Privacidad y Aislamiento de Datos**: La base de datos SQLite ya no se comparte en la nube ni en el código fuente. Cada instalación genera su propia BBDD limpia en el directorio protegido del usuario (`%APPDATA%\wpo-engine\wpo-historics.sqlite`).
-4. **Programador de Tareas Autónomo**: Hemos sustituido la pesada dependencia de BullMQ y Redis por un planificador de crons en memoria nativo de Node.js que opera en segundo plano dentro de la app de escritorio.
-5. **UI Neutra y Profesional**: Los placeholders de interfaz han sido estandarizados (`tutienda.com`, `alertas@tutienda.com`) para permitir la distribución y uso como marca blanca o herramienta de agencia.
+**Fecha de lanzamiento:** Mayo 2026
+**Tipo:** Major release — Desktop Edition
 
 ---
 
-## 🏗️ Arquitectura Técnica
+## Descarga
 
-El sistema utiliza un enfoque híbrido (Server-Side Rendering embebido):
+Instala la última versión desde la pestaña [Releases de GitHub](https://github.com/HugoSabater/WPO-Engine/releases):
 
-```mermaid
-graph TD
-    UI[Frontend Vite/React] --> |Peticiones HTTP:3000| IPC[Servidor Express Local]
-    IPC --> DB[(SQLite appData)]
-    IPC --> CRON[Node Scheduler]
-    IPC --> LH[Motor Lighthouse]
-    LH --> CHROME[Google Chrome SO]
-    CRON --> |Despierta| LH
+```
+WPO Engine Setup 2.0.0.exe
 ```
 
-1. **Electron Main Process**: Actúa como un contenedor que enciende un servidor **Express.js** en el puerto `3000`. Esto permite reutilizar el 90% del código original del Backend de Docker sin tener que migrar toda la lógica de los controladores a comunicación IPC estricta.
-2. **Electron Renderer**: Utiliza la SPA compilada con **Vite**. Al detectar el entorno de escritorio, las peticiones HTTP (como el crawler o la cola) viajan directamente a `127.0.0.1:3000` en vez de buscar un orquestador externo.
-3. **Asar Unpacking**: La dependencia crítica nativa de `sqlite3` se desempaqueta fuera del archivo de sólo lectura `app.asar` para evitar los errores de permisos (ReadOnly) comunes en Windows.
+**Requisito único:** Google Chrome instalado en Windows. No se necesita Node.js, Docker ni ninguna dependencia adicional.
 
 ---
 
-## 📦 Instrucciones de Distribución y Uso
+## ¿Qué cambia respecto a la versión anterior?
 
-### Compartir con Compañeros
-Para distribuir esta herramienta, **no necesitas enviar el código fuente**.
-1. Simplemente localiza el archivo generado: `C:\WPO-Build\release\WPO Engine Setup 2.0.0.exe`.
-2. Súbelo a Google Drive, compártelo por WeTransfer o añádelo como un `Release` oficial en GitHub.
-3. Tus compañeros de trabajo o clientes solo necesitan instalar el `.exe`.
+La v2.0.0 elimina por completo la dependencia de Docker. La herramienta se distribuye como un instalador Windows estándar y funciona de manera autónoma.
 
-> [!IMPORTANT]
-> **Privacidad Asegurada:** Cuando un compañero instale la app, Electron detectará su perfil de Windows y generará una base de datos vacía y privada en *su* disco. ¡Tus métricas de auditorías locales o credenciales no están dentro del instalador!
+| Aspecto | v1.x (Docker) | v2.0.0 (Desktop) |
+|---------|--------------|-----------------|
+| Instalación | Docker Desktop + `docker compose up` | Doble clic en el `.exe` |
+| Base de datos | Volumen Docker compartido | Carpeta privada del usuario (`%APPDATA%`) |
+| Motor de análisis | Puppeteer en contenedor Ubuntu | Chrome nativo del sistema |
+| Cola de tareas | BullMQ + Redis (2 contenedores) | Cola en memoria (sin dependencias externas) |
+| Scheduler | BullMQ repeatable jobs | `node-cron` integrado |
 
-### Subida Segura a GitHub (Repositorio)
-El proyecto ha sido desinfectado y está listo para hacer `git commit` y `git push`.
-Se han aplicado las siguientes medidas de seguridad en el `.gitignore`:
-- Las carpetas de compilación pesadas (`frontend/dist-electron`, `frontend/release`, `C:\WPO-Build`) se omiten.
-- Las bases de datos SQLite y los archivos temporales de registro WAL (`db/*.sqlite`) están bloqueados.
-- Las variables de entorno de secretos (si las hubiera en un futuro) están ocultas.
+---
 
-**Comandos a ejecutar en tu terminal local para subir a GitHub:**
-```bash
-git add .
-git commit -m "🚀 feat: Lanzamiento WPO Engine v2.0.0 (Desktop Edition)"
-git push origin main
+## Nuevas funcionalidades en v2.0.0
+
+### Web Crawler integrado
+Desde Site Explorer, activa el toggle **"Rastrear enlaces internos"** e introduce la URL raíz de tu tienda. El motor descargará el HTML, extraerá todos los enlaces internos y los enviará a auditar automáticamente en lote (hasta 50 URLs).
+
+### Auditorías en lote
+Envía hasta 50 URLs de una vez al motor de Lighthouse. Las auditorías se procesan de forma secuencial (una a la vez, para no saturar el PC) y los resultados aparecen en Reports cuando cada una termina.
+
+### Filtros en Reports
+La pestaña Reports incluye ahora un campo de búsqueda por URL y un selector de estado de salud (Todas / Críticas / Mejorables / Óptimas).
+
+### Navegación contextual entre pestañas
+- Desde **Reports** → crea una automatización para cualquier URL con un clic en el icono de reloj.
+- Desde **Site Explorer** → abre el detalle completo de cualquier URL en Dashboard, o filtra los resultados en Reports.
+
+---
+
+## Privacidad de datos
+
+Cada instalación crea una base de datos SQLite completamente aislada:
+
+```
+C:\Users\<usuario>\AppData\Roaming\WPO Analytics Engine\wpo-historics.sqlite
 ```
 
+Esta ruta:
+- Es exclusiva de cada perfil de Windows.
+- No se incluye en el repositorio de código (protegida por `.gitignore`).
+- No se transmite a ningún servidor externo.
+- Al instalar la app en otro PC, se crea una base de datos nueva y vacía.
+
 ---
 
-## ⚖️ Estándares y Pruebas de Calidad (QA)
+## Compartir la herramienta
 
-Durante la "Fase de Jefe Final" de empaquetado, hemos superado los siguientes puntos de fricción estándar de la industria:
-- **Code Signing Timeout**: Evadimos el chequeo de certificados de firma de código en la generación del instalador NSIS para permitir una compilación sin errores para aplicaciones open source o de distribución interna.
-- **Node-GYP / N-API compatibility**: Las dependencias problemáticas como `bullmq` / `msgpackr` fueron neutralizadas y `sqlite3` se configuró para compilarse acorde al módulo nativo C++ de Node v36 de la versión de Electron utilizada.
-- **Rutas Relativas en SPA**: Ajustado el proxy HTTP para soportar peticiones a la API desde el protocolo `file://` del escritorio evitando bloqueos CORS o `Failed to Fetch`.
+Para distribuir la herramienta a compañeros de equipo:
+
+1. Descarga el instalador desde [Releases](https://github.com/HugoSabater/WPO-Engine/releases).
+2. Envía el archivo `WPO Engine Setup 2.0.0.exe` por cualquier medio (Drive, WeTransfer, Slack).
+3. Cada persona lo instala en su PC con doble clic.
+
+No se comparten datos entre instalaciones.
+
+---
+
+## Historial completo de cambios
+
+Ver [`CHANGELOG.md`](./CHANGELOG.md) para el registro detallado de todos los cambios de esta versión y las anteriores.
