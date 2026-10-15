@@ -1,10 +1,12 @@
 # WPO Analytics Engine
 
-> Herramienta de escritorio para monitorización continua del rendimiento web. Audita URLs con Google Lighthouse, almacena el histórico localmente y genera alertas cuando las métricas de Core Web Vitals se degradan.
-
+[![CI](https://github.com/HugoSabater/WPO-Engine/actions/workflows/ci.yml/badge.svg)](https://github.com/HugoSabater/WPO-Engine/actions/workflows/ci.yml)
 [![Versión](https://img.shields.io/badge/versión-2.0.0-blue)](./docs/CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green)](./LICENSE)
 [![Plataforma](https://img.shields.io/badge/plataforma-Windows-lightgrey)](./docs/RELEASE_V2.md)
+
+> Herramienta de escritorio para monitorización continua del rendimiento web. Audita URLs con Google Lighthouse, almacena el histórico localmente y genera alertas cuando las métricas de Core Web Vitals se degradan.
+
 
 ---
 

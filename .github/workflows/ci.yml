@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Validate TypeScript Modules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate API TypeScript
+        working-directory: ./api
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+
+      - name: Validate Worker TypeScript
+        working-directory: ./worker
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+
+      - name: Validate Frontend TypeScript
+        working-directory: ./frontend
+        run: |
+          npm install --legacy-peer-deps --ignore-scripts
+          npx tsc --noEmit
